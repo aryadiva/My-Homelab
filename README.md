@@ -1,4 +1,4 @@
-# My-Homelab-Setup v3
+# My-Homelab-Setup v4 (AI Assisted)
 ---
 ---
 # 🏗️ Enterprise-Grade Homelab Architecture & Documentation
@@ -9,6 +9,7 @@ Welcome to the central repository for my homelab infrastructure. This documentat
 
 ## ⚙️ Table of Contents
 
+*   [0. Documentation Index](#0-documentation-index)
 *   [1. System Architecture Overview](#1-system-architecture-overview)
 *   [2. Compute & Hardware Topology](#2-compute--hardware-topology)
 *   [3. Software Stack & DevOps Lifecycle](#3-software-stack--devops-lifecycle)
@@ -16,6 +17,41 @@ Welcome to the central repository for my homelab infrastructure. This documentat
 *   [5. Containerized Services Directory](#5-containerized-services-directory)
 *   [6. Engineering Roadmap](#6-engineering-roadmap)
 *   [7. Appendices & Administrative Notes](#7-appendices--administrative-notes)
+
+---
+
+## 0. Documentation Index
+
+Detailed documentation is organized into the following directories:
+
+### `network/` — Network Architecture
+| Document | Description |
+|----------|-------------|
+| [`network/topology.md`](network/topology.md) | Physical WAN/LAN topology, overlay networks, traffic flow |
+| [`network/ip-assignments.md`](network/ip-assignments.md) | Static IP allocations, WireGuard subnet, Tailscale, DNS |
+| [`network/firewall-rules.md`](network/firewall-rules.md) | ER605 load balancing policy, Pi-hole ACLs, container isolation, VPS firewall |
+
+### `services/` — Service Inventory & Operations
+| Document | Description |
+|----------|-------------|
+| [`services/inventory.md`](services/inventory.md) | Full service table: host, port, storage, network namespace |
+| [`services/docker-compose-overview.md`](services/docker-compose-overview.md) | Compose stack architecture with representative snippets |
+| [`services/container-network-map.md`](services/container-network-map.md) | Network isolation model, port mapping, communication rules |
+| [`services/migration-plan.md`](services/migration-plan.md) | Docker → k3s phased migration plan (priority: Nextcloud + Immich) |
+
+### `procedures/` — Operational Runbooks
+| Document | Description |
+|----------|-------------|
+| [`procedures/backup-restore.md`](procedures/backup-restore.md) | Backup schedules, DB dumps, volume backups, restore steps |
+| [`procedures/power-outage.md`](procedures/power-outage.md) | Boot order, LVM recovery, container startup sequence |
+| [`procedures/deployment.md`](procedures/deployment.md) | Standard update workflow, rollback, adding new services |
+| [`procedures/vpn-config.md`](procedures/vpn-config.md) | WireGuard, Tailscale, and Gluetun configuration |
+
+### `diagrams/` — Visual Reference
+| Document | Description |
+|----------|-------------|
+| [`diagrams/architecture-overview.md`](diagrams/architecture-overview.md) | Narrative walkthrough of the network diagram |
+| [`diagrams/Updated Homelab Architecture v3.drawio.png`](diagrams/Updated%20Homelab%20Architecture%20v3.drawio.png) | Visual network topology diagram |
 
 ---
 
@@ -30,7 +66,7 @@ This deployment leverages a hybrid topology, blending local bare-metal edge comp
 ### Primary On-Premises Node
 *   **Compute:** Raspberry Pi 5 Model B (ARM64 Architecture)
 *   **Memory:** 8GB LPDDR4X SDRAM
-*   **Storage subsystem:** 6TB High-Capacity Mechanical HDD (Provisioned for centralized network-attached storage)
+*   **Storage subsystem:** 6TB total (2×3TB HDDs combined via LVM, mounted at `/mnt/lvm`)
 
 ### Auxiliary Cloud Node
 *   **Instance Type:** Remote Virtual Private Server (VPS)
@@ -63,7 +99,9 @@ This deployment leverages a hybrid topology, blending local bare-metal edge comp
 *   **Local Distribution:** Managed Layer 2/3 LAN switching fabric.
 
 ### Overlay Networks & Secure Tunnels
-*   **Primary Ingress/Egress:** WireGuard Peer-to-Peer (P2P) point-to-point encrypted tunnels, routing traffic securely between the on-premises node and the public VPS cloud boundary.
+*   **WireGuard (Server / Client):** The cloud VPS runs a WireGuard server. All LAN devices (Pi, Garuda Desktop, laptops, phones) connect as WireGuard clients. The VPS routes traffic between peers and provides secure access to services and DNS.
+*   **Reverse Proxy:** Caddy runs on the VPS, terminating HTTPS for public subdomains (e.g., `nextcloud.example.com`) and proxying requests through the WireGuard tunnel to the appropriate service on the Pi.
+*   **DNS:** Pi-hole runs as a container on the VPS, listening on the WireGuard interface. All LAN devices are configured with `10.0.1.1` as their DNS server, forwarding queries through the tunnel.
 *   **Fallback Mesh:** Tailscale integration, functioning as a CGNAT-traversing overlay network for secondary access and out-of-band administration.
 
 ---
@@ -86,7 +124,8 @@ The infrastructure hosts an array of containerized applications segmenting media
 *   **qBittorrent / Gluetun:** Downstream torrent client strictly bound via network namespaces to a Gluetun VPN container utilizing Surfshark (WireGuard/OpenVPN protocols) to prevent IP leakage.
 
 ### Network Security & Observability
-*   **Pi-hole:** Network-wide upstream DNS sinkhole utilized for ad-blocking and local DNS split-horizon routing.
+*   **Pi-hole:** Network-wide upstream DNS sinkhole hosted on the VPS. All LAN devices route DNS queries through the WireGuard tunnel to Pi-hole for ad-blocking and local DNS resolution.
+*   **Caddy:** Automated HTTPS reverse proxy on the VPS, proxying public subdomains to Pi services over the WireGuard tunnel.
 *   **Uptime Kuma:** State-driven HTTP/TCP/Ping monitoring solution providing real-time alerts on container availability and network latencies.
 
 ### Core AI & Compute Offloading
