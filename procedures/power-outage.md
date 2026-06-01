@@ -30,7 +30,7 @@ After a power outage, the system must be restored in the correct sequence to avo
 - **If not booting:** Check the USB-C power supply and SD card / SSD connection.
 - **Connect via SSH:**
   ```bash
-  ssh user@10.0.0.[PLACEHOLDER]
+  ssh arya-ubuntu@10.9.0.4
   ```
 - **Verify system health:**
   ```bash
@@ -56,9 +56,6 @@ sudo lvscan
 ls /mnt/lvm  # Should show contents
 # If empty, mount manually:
 sudo mount /dev/[PLACEHOLDER: vg name]/[PLACEHOLDER: lv name] /mnt/lvm
-
-# Verify FUSE mount if applicable
-# [PLACEHOLDER: add any FUSE-specific commands if the docking enclosure uses mergerfs or similar]
 ```
 
 **If LVM fails to activate:**
@@ -126,7 +123,8 @@ Immich DB + Redis → Immich server + microservices + ML
 ### 7. Garuda Desktop (if applicable)
 
 - Boot normally.
-- Verify Ollama and Open WebUI are running:
+- Open docker if not enabled at startup.
+- Verify Ollama, Open WebUI, Opencode and 9router are running:
   ```bash
   systemctl --user status ollama
   systemctl --user status open-webui
@@ -176,9 +174,9 @@ echo "WireGuard: $(sudo wg show | grep -c handshake) active peers"
 
 ## Prevention
 
-- [ ] Configure Pi to boot on power restore (already done? [PLACEHOLDER])
-- [ ] Add `/etc/fstab` entry for LVM auto-mount
-- [ ] Consider UPS for graceful shutdown:
+- [ ] Configure Pi to boot on power restore (already done? [Not yet])
+- [ ] Add `/etc/fstab` entry for LVM auto-mount -> Yes
+- [ ] Consider UPS for graceful shutdown: [Planning to buy]
   ```bash
   # Example: configure NUT client for USB UPS
   sudo apt install nut-client

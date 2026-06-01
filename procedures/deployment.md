@@ -70,10 +70,10 @@ docker compose up -d <service-name>
 
 | Service | Previous Stable Tag |
 |---------|-------------------|
-| Nextcloud | `[PLACEHOLDER: e.g., 28-stable]` |
-| Immich | `[PLACEHOLDER: e.g., v1.90.0]` |
-| Jellyfin | `[PLACEHOLDER: e.g., 10.8.13]` |
-| Pi-hole | `[PLACEHOLDER: e.g., 2024.07.0]` |
+| Nextcloud | `v32` |
+| Immich | `v2.7.4` |
+| Jellyfin | `v10.11.8` |
+| Pi-hole | `v6.4` |
 
 ---
 
@@ -106,7 +106,7 @@ PIHOLE_WEBPASSWORD=your_password_here
 WIREGUARD_PRIVATE_KEY=your_key_here
 PUID=1000
 PGID=1000
-TZ=Australia/Perth
+TZ=Asia/Jakarta
 ```
 
 ---
@@ -137,7 +137,7 @@ docker exec nextcloud occ maintenance:mode --off
 ### Jellyfin
 
 - Media is mounted **read-only** (`:ro` suffix in volume mount).
-- To add new media, write to `/mnt/lvm/media/` directly (not through Jellyfin).
+- To add new media, write to `/mnt/lvm/media/` directly (not through Jellyfin) through nextcloud or save files from qBittorrent.
 
 ### Pi-hole
 

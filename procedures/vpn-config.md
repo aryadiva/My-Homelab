@@ -15,11 +15,11 @@ Three VPN layers exist in this infrastructure:
 ### Architecture
 
 ```
-Cloud VPS (public IP) ─── WireGuard Server (10.0.1.1)
+Cloud VPS (public IP) ─── WireGuard Server (10.9.0.1)
       │
-      ├── Raspberry Pi 5 (client)      ─── 10.0.1.x
-      ├── Garuda Desktop (client)      ─── 10.0.1.x
-      ├── Laptop / Phone (client)      ─── 10.0.1.x
+      ├── Raspberry Pi 5 (client)      ─── 10.9.0.x
+      ├── Garuda Desktop (client)      ─── 10.9.0.x
+      ├── Laptop / Phone (client)      ─── 10.9.0.x
       └── ... other LAN devices
 ```
 
@@ -29,38 +29,57 @@ The VPS runs the WireGuard server natively (not in Docker). All other devices ru
 
 ```
 [Interface]
-PrivateKey = [PLACEHOLDER: VPS private key]
-Address = 10.0.1.1/24
-ListenPort = [PLACEHOLDER: e.g., 51820]
+Address = 10.9.0.1/24
+ListenPort = 51820
+PrivateKey = [VPS private key]
 
-# Enable IP forwarding
-net.ipv4.ip_forward = 1
+# Allow traffic to reach your home LAN later (we'll add this line in step 6)
+PostUp = iptables -A FORWARD -i %i -o eth0 -j ACCEPT
+PostUp = iptables -A FORWARD -i eth0 -o %i -j ACCEPT
+PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -o eth0 -j ACCEPT
+PostDown = iptables -D FORWARD -i eth0 -o %i -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 
-# Raspberry Pi 5
+# Arch PC peer (VPN client)
 [Peer]
-PublicKey = [PLACEHOLDER: Pi public key]
-AllowedIPs = 10.0.1.2/32, 10.0.0.0/24
+PublicKey = [Garuda arch public key]
+AllowedIPs = 10.9.0.2/32, 192.168.10.201/32
 
-# Garuda Arch Desktop
+# Windows remote client peer
 [Peer]
-PublicKey = [PLACEHOLDER: Garuda public key]
-AllowedIPs = 10.0.1.3/32
+PublicKey = [Windows laptop public key]
+AllowedIPs = 10.9.0.3/32
 
-# [PLACEHOLDER: additional peers]
+# Homelab Ubuntu Server
+[Peer]
+PublicKey = [Pi Ubuntu server public key]
+AllowedIPs = 10.9.0.4/32
+
+# Samsung arya
+[Peer]
+PublicKey = [Samsung phone public key]
+AllowedIPs = 10.9.0.5/32
+
+# OrangePi
+[Peer]
+PublicKey = [OrangePi public key]
+AllowedIps = 10.9.0.6/32
 ```
 
 ### Client Configuration (Raspberry Pi 5 — `/etc/wireguard/wg0.conf`)
 
 ```
 [Interface]
-PrivateKey = [PLACEHOLDER: Pi private key]
-Address = 10.0.1.2/32
-DNS = 10.0.1.1  # Pi-hole on VPS
+PrivateKey = [pi wg private key]
+ListenPort = 51820
+Address = 10.9.0.4/24
+#DNS = 1.1.1.1
 
 [Peer]
-PublicKey = [PLACEHOLDER: VPS public key]
-Endpoint = [PLACEHOLDER: VPS public IP]:[PLACEHOLDER: port]
-AllowedIPs = 10.0.1.0/24
+PublicKey = [VPS wg public ip key]
+Endpoint = [VPS public ip]:51820
+AllowedIPs = 10.9.0.1/24
 PersistentKeepalive = 25
 ```
 
@@ -68,14 +87,15 @@ PersistentKeepalive = 25
 
 ```
 [Interface]
-PrivateKey = [PLACEHOLDER: Garuda private key]
-Address = 10.0.1.3/32
-DNS = 10.0.1.1  # Pi-hole on VPS
+PrivateKey = [arch garuda wg private key]
+ListenPort = 51820
+Address = 10.9.0.2/24
+DNS = 10.9.0.1
 
 [Peer]
-PublicKey = [PLACEHOLDER: VPS public key]
-Endpoint = [PLACEHOLDER: VPS public IP]:[PLACEHOLDER: port]
-AllowedIPs = 10.0.1.0/24
+PublicKey = [VPS wg public ip key]
+Endpoint = [VPS public ip]:51820
+AllowedIPs = 10.9.0.0/24, 192.168.10.0/24
 PersistentKeepalive = 25
 ```
 
@@ -85,18 +105,18 @@ Use the official WireGuard apps. Create a config file with:
 
 ```
 [Interface]
-PrivateKey = [PLACEHOLDER: client private key]
-Address = 10.0.1.x/32
-DNS = 10.0.1.1  # Pi-hole on VPS
+PrivateKey = [client private key]
+Address = 10.9.0.x/32
+DNS = 10.9.0.1  # Pi-hole on VPS
 
 [Peer]
-PublicKey = [PLACEHOLDER: VPS public key]
-Endpoint = [PLACEHOLDER: VPS public IP]:[PLACEHOLDER: port]
-AllowedIPs = 10.0.1.0/24
+PublicKey = [VPS public key]
+Endpoint = [VPS public IP]:[port]
+AllowedIPs = 10.9.0.0/24
 PersistentKeepalive = 25
 ```
 
-> **Note:** If you want to route all device traffic through the VPS (full-tunnel), change `AllowedIPs` to `0.0.0.0/0, ::/0`. The current config uses split-tunnel (only WireGuard subnet traffic goes through the tunnel).
+> **Note:** If you want to route all device traffic through the VPS (full-tunnel -> **not recommended**), change `AllowedIPs` to `0.0.0.0/0, ::/0`. The current config uses split-tunnel (only WireGuard subnet traffic goes through the tunnel).
 
 ### Key Generation
 
@@ -139,9 +159,10 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 
 # On headless devices (Pi, VPS):
-sudo tailscale up --authkey=[PLACEHOLDER: auth key from Tailscale admin console]
+sudo tailscale up --authkey=[PLACEHOLDER: auth key from Tailscale admin console] 
 ```
 
+- tailscale install command on linux machines are available on tailscale dashboard
 ### Configuration
 
 - **Subnet routing** (if desired):
@@ -235,7 +256,7 @@ Gluetun has a built-in kill switch. If the VPN drops:
 
 ```bash
 # On client (e.g., Pi):
-ping 10.0.1.1  # VPS tunnel IP
+ping 10.9.0.1  # VPS tunnel IP
 sudo wg show
 sudo tcpdump -i wg0 -n
 
@@ -251,14 +272,14 @@ sudo ufw status  # Check firewall allows WireGuard port
 # Verify client is connected to WireGuard
 sudo wg show
 
-# Verify client DNS is set to 10.0.1.1
+# Verify client DNS is set to 10.9.0.1
 # From client:
-nslookup nextcloud.example.com 10.0.1.1
+nslookup nextcloud.example.com 10.9.0.1
 
 # Verify VPS can reach the Pi over WireGuard
 # From VPS:
-ping 10.0.1.x  # Pi WireGuard IP
-curl http://10.0.1.x:8080  # Test Nextcloud directly
+ping 10.9.0.x  # Pi WireGuard IP
+curl http://10.9.0.x:8080  # Test Nextcloud directly
 ```
 
 ### Gluetun Connection Issues
