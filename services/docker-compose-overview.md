@@ -9,14 +9,14 @@ Containers are organized into logical groups. Each group shares a Docker bridge 
 | Group | Network | Includes |
 |-------|---------|----------|
 | Infrastructure | `infra_net` | Homepage, Portainer, Uptime Kuma |
-| Media/Storage | `media_net` | Nextcloud, Immich, Jellyfin, Prowlarr, Radarr |
+| Media/Storage | `media_net` | Nextcloud, Immich, Matrix Synapse, LiveKit, Jellyfin, Prowlarr, Radarr |
 | VPN-Isolated | `gluetun` | qBittorrent (shares Gluetun network namespace) |
 
 ### Cloud VPS (Docker Host)
 
 | Group | Network | Includes |
 |-------|---------|----------|
-| VPS Services | `vps_net` | Pi-hole, Caddy |
+| VPS Services | `vps_net` | Pi-hole, Caddy, Dashy, Vault Warden |
 | WireGuard | Host-level | WireGuard runs natively on the VPS (not in Docker) |
 
 ---
@@ -211,7 +211,70 @@ immich-redis:
     - media_net
 ```
 
+#### Matrix Synapse (with LiveKit)
+
+```yaml
+synapse:
+  image: matrixdotorg/synapse:latest
+  container_name: synapse
+  ports:
+    - "[PLACEHOLDER_HOST_IP]:8008:8008"
+  volumes:
+    - ./synapse/data:/data
+    - ./synapse/config:/etc/matrix-synapse
+  environment:
+    SYNAPSE_SERVER_NAME: matrix.aryadivap.com
+    SYNAPSE_REPORT_STATS: "no"
+    POSTGRES_HOST: synapse-db
+    POSTGRES_DB: synapse
+    POSTGRES_USER: synapse
+    POSTGRES_PASSWORD: "[PLACEHOLDER]"
+  depends_on:
+    - synapse-db
+  restart: unless-stopped
+  networks:
+    - media_net
+
+synapse-db:
+  image: postgres:15-alpine
+  container_name: synapse-db
+  volumes:
+    - ./synapse/db:/var/lib/postgresql/data
+  environment:
+    POSTGRES_DB: synapse
+    POSTGRES_USER: synapse
+    POSTGRES_PASSWORD: "[PLACEHOLDER]"
+  restart: unless-stopped
+  networks:
+    - media_net
+
+matrix-rtc-jwt:
+  image: ghcr.io/matrix-org/matrix-rtc-jwt:latest
+  container_name: matrix-rtc-jwt
+  ports:
+    - "[PLACEHOLDER_HOST_IP]:8081:8081"
+  volumes:
+    - ./synapse/rtc-jwt:/config
+  restart: unless-stopped
+  networks:
+    - media_net
+
+livekit-server:
+  image: livekit/livekit-server:latest
+  container_name: livekit-server
+  ports:
+    - "[PLACEHOLDER_HOST_IP]:7880:7880"
+    - "[PLACEHOLDER_HOST_IP]:7881:7881"
+    - "[PLACEHOLDER_HOST_IP]:50100-50200:50100-50200/udp"
+  volumes:
+    - ./synapse/livekit:/etc/livekit
+  restart: unless-stopped
+  networks:
+    - media_net
+```
+
 #### Jellyfin
+
 
 ```yaml
 jellyfin:
@@ -323,8 +386,10 @@ pihole:
   image: pihole/pihole:latest
   container_name: pihole
   ports:
-    - "10.0.1.1:53:53/tcp"
-    - "10.0.1.1:53:53/udp"
+
+
+    - "10.9.0.1:53:53/tcp"
+    - "10.9.0.1:53:53/udp"
     - "127.0.0.1:80:80/tcp"
   environment:
     TZ: "[PLACEHOLDER: timezone]"
@@ -336,9 +401,42 @@ pihole:
     - ./pihole/config:/etc/pihole
     - ./pihole/dnsmasq:/etc/dnsmasq.d
   restart: unless-stopped
-  networks:
     vps_net:
-      ipv4_address: "10.0.1.x"  # [PLACEHOLDER: pick an IP in the WG subnet]
+      ipv4_address: "10.9.0.x"  # [PLACEHOLDER: pick an IP in the WG subnet]
+```
+
+#### Dashy
+
+```yaml
+dashy:
+  image: lissy93/dashy:latest
+  container_name: dashy
+  ports:
+    - "[PLACEHOLDER_VPS_IP]:8080:80"
+  volumes:
+    - ./dashy/conf.yml:/app/public/conf.yml
+    - ./dashy/icons:/app/public/item-icons
+  restart: unless-stopped
+  networks:
+    - vps_net
+```
+
+#### Vault Warden
+
+```yaml
+vaultwarden:
+  image: vaultwarden/server:latest
+  container_name: vaultwarden
+  ports:
+    - "[PLACEHOLDER_VPS_IP]:8989:80"
+  volumes:
+    - ./vaultwarden/data:/data
+  environment:
+    SIGNUPS_ALLOWED: "false"    # Disable after creating accounts
+    ADMIN_TOKEN: "[PLACEHOLDER: strong admin token]"
+  restart: unless-stopped
+  networks:
+    - vps_net
 ```
 
 #### Caddy
@@ -362,17 +460,14 @@ caddy:
 **Caddyfile example:**
 
 ```
-jellyfin.example.com {
-    reverse_proxy http://10.0.1.x:8096
+    reverse_proxy http://10.9.0.x:8096
 }
 
 nextcloud.example.com {
-    reverse_proxy http://10.0.1.x:8080
 }
 
 immich.example.com {
-    reverse_proxy http://10.0.1.x:2283
-}
+    reverse_proxy http://10.9.0.x:2283
 ```
 
 ---

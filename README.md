@@ -43,7 +43,6 @@ Detailed documentation is organized into the following directories:
 | Document | Description |
 |----------|-------------|
 | [`procedures/backup-restore.md`](procedures/backup-restore.md) | Backup schedules, DB dumps, volume backups, restore steps |
-| [`procedures/power-outage.md`](procedures/power-outage.md) | Boot order, LVM recovery, container startup sequence |
 | [`procedures/deployment.md`](procedures/deployment.md) | Standard update workflow, rollback, adding new services |
 | [`procedures/vpn-config.md`](procedures/vpn-config.md) | WireGuard, Tailscale, and Gluetun configuration |
 
@@ -101,7 +100,7 @@ This deployment leverages a hybrid topology, blending local bare-metal edge comp
 ### Overlay Networks & Secure Tunnels
 *   **WireGuard (Server / Client):** The cloud VPS runs a WireGuard server. All LAN devices (Pi, Garuda Desktop, laptops, phones) connect as WireGuard clients. The VPS routes traffic between peers and provides secure access to services and DNS.
 *   **Reverse Proxy:** Caddy runs on the VPS, terminating HTTPS for public subdomains (e.g., `nextcloud.example.com`) and proxying requests through the WireGuard tunnel to the appropriate service on the Pi.
-*   **DNS:** Pi-hole runs as a container on the VPS, listening on the WireGuard interface. All LAN devices are configured with `10.0.1.1` as their DNS server, forwarding queries through the tunnel.
+*   **DNS:** Pi-hole runs as a container on the VPS, listening on the WireGuard interface. All LAN devices are configured with `10.9.0.1` as their DNS server, forwarding queries through the tunnel.
 *   **Fallback Mesh:** Tailscale integration, functioning as a CGNAT-traversing overlay network for secondary access and out-of-band administration.
 
 ---
@@ -111,12 +110,17 @@ This deployment leverages a hybrid topology, blending local bare-metal edge comp
 The infrastructure hosts an array of containerized applications segmenting media, storage, security, and AI workloads:
 
 ### Application Delivery & Management
-*   **Homepage:** Distributed dashboard acting as the unified single-pane-of-glass application portal (`gethomepage.dev`).
+*   **Dashy:** Centralized dashboard acting as the unified single-pane-of-glass application portal, hosted on the VPS as a self-contained Docker container with dynamic YAML-based configuration, accessed at `home.aryadivap.com`.
 *   **Portainer CE:** Multi-cluster container management platform deployed agentless to oversee workloads across both local and VPS engines.
 
 ### Storage & Identity Asset Management
 *   **Nextcloud Hub:** High-availability self-hosted productivity suite utilized for automated file synchronization and cross-device document backups.
 *   **Immich:** High-performance, self-hosted asset management engine utilized for automated mobile photo/video backup.
+
+
+### Secure Communications
+*   **Matrix Synapse:** Self-hosted, end-to-end encrypted chat server for secure private messaging with friends, deployed on the Raspberry Pi 5 with a PostgreSQL 15 Alpine backend.
+*   **LiveKit Server:** WebRTC infrastructure enabling high-quality voice and video calls for Element X clients, bundled with Matrix RTC JWT for token-based authentication (port 8081).
 
 ### Media & Entertainment Subsystem
 *   **Jellyfin:** Open-source media server operating on a strict **read-only** mount isolated from the underlying storage layer, integrated with Nextcloud directories.
@@ -126,6 +130,7 @@ The infrastructure hosts an array of containerized applications segmenting media
 ### Network Security & Observability
 *   **Pi-hole:** Network-wide upstream DNS sinkhole hosted on the VPS. All LAN devices route DNS queries through the WireGuard tunnel to Pi-hole for ad-blocking and local DNS resolution.
 *   **Caddy:** Automated HTTPS reverse proxy on the VPS, proxying public subdomains to Pi services over the WireGuard tunnel.
+*   **Vault Warden:** Self-hosted, privacy-first password manager (Bitwarden-compatible) deployed on the VPS for secure credential storage and cross-device sync, accessed at `vault.aryadivap.com`.
 *   **Uptime Kuma:** State-driven HTTP/TCP/Ping monitoring solution providing real-time alerts on container availability and network latencies.
 
 ### Core AI & Compute Offloading

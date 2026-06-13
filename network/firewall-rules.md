@@ -68,7 +68,7 @@ The ER605 is configured for **dual-ISP load balancing with automatic failover**.
 ### Gluetun VPN Namespace
 - **Policy:** qBittorrent is bound to Gluetun's network namespace — no direct host network access
 - **Kill Switch:** Enabled (traffic drops if VPN disconnects)
-- **Allowed Subnets:** `10.0.9.0/24` (LAN + WireGuard access for Web UI)
+- **Allowed Subnets:** `10.9.0.0/24` (LAN + WireGuard access for Web UI)
 
 ### Docker Bridge Networks
 - Containers on the same Docker bridge network can communicate freely.

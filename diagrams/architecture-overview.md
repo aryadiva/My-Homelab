@@ -19,20 +19,26 @@ Cloud VPS (public edge)
     ├── Caddy reverse proxy (443/80)
     │     └── Terminates HTTPS, proxies via WireGuard
     │
+    ├── Dashy Dashboard (8080, VPS IP)
+    │     └── Central web portal for self-hosted services (replaces Homepage)
+    │
+    ├── Vault Warden (8989, VPS IP)
+    │     └── Self-hosted Bitwarden-compatible password manager
+    │
     ├── Pi-hole DNS (53)
     │     └── Resolves/filters DNS for all LAN devices
     │
-    └── WireGuard server (wg0, 10.0.1.1)
+    └── WireGuard server (wg0, 10.9.0.1)
           │
-          ├── Raspberry Pi 5 (client, 10.0.1.x)
+          ├── Raspberry Pi 5 (client, 10.9.0.4)
           │     ├── Docker Engine
           │     │     ├── Infrastructure (Portainer, Homepage, Uptime Kuma)
-          │     │     ├── Media/Storage (Nextcloud, Immich, Jellyfin, Radarr, Prowlarr)
+          │     │     ├── Media/Storage (Nextcloud, Immich, Jellyfin, Radarr, Prowlarr, Matrix Synapse, LiveKit)
           │     │     └── VPN-Isolated (Gluetun → qBittorrent)
           │     │
           │     └── LVM Storage (/mnt/lvm, 2×3TB HDDs)
           │
-          ├── Garuda Arch Desktop (client, 10.0.1.x)
+          ├── Garuda Arch Desktop (client, 10.9.0.2)
           │     └── Ollama + Open WebUI (GPU)
           │
           └── LAN devices (clients, laptops, phones)
@@ -57,7 +63,7 @@ LAN device ──WireGuard── VPS (server) ──WireGuard── Pi/Garuda
 | LVM storage pool | `/mnt/lvm` | 2×3TB HDDs combined via LVM |
 | Docker containers (Pi) | All services | Split across 3 network zones |
 | Docker containers (VPS) | Pi-hole + Caddy | DNS and reverse proxy |
-| WireGuard icon | `wg0` server/client | `10.0.1.0/24` subnet, VPS is server |
+| WireGuard icon | `wg0` server/client | `10.9.0.0/24` subnet, VPS is server |
 | Tailscale icon | Fallback mesh | Out-of-band admin access |
 | ER605 router | TP-Link Omada ER605 | Dual-ISP load balancing, NO port forwarding |
 | Garuda node | Arch Linux desktop | GPU compute (Ollama), WireGuard client |
@@ -78,11 +84,11 @@ User types nextcloud.example.com
 Cloud VPS (port 443)
   │
   │ Caddy matches nextcloud.example.com
-  │ Caddyfile: reverse_proxy http://10.0.1.2:8080
+  │ Caddyfile: reverse_proxy http://10.9.0.4:8080
   │
   │ WireGuard tunnel (VPS → Pi)
   ▼
-Raspberry Pi 5 (10.0.1.2)
+Raspberry Pi 5 (10.9.0.4)
   │
   │ Docker (media_net)
   ▼
@@ -96,11 +102,11 @@ Nextcloud container (port 8080)
 ### 2. LAN device resolves DNS
 
 ```
-Laptop → DNS server set to 10.0.1.1 (VPS WireGuard IP)
+Laptop → DNS server set to 10.9.0.1 (VPS WireGuard IP)
   │
   │ WireGuard tunnel to VPS
   ▼
-VPS WireGuard server → Pi-hole container (10.0.1.x:53)
+VPS WireGuard server → Pi-hole container (10.9.0.x:53)
   │
   ├── If local domain: returns rewritten IP
   └── If internet domain: forwards to upstream DNS
@@ -126,10 +132,10 @@ Download written to /mnt/lvm/downloads/
 ### 4. Local file access via LAN (mobile device connected to WireGuard)
 
 ```
-Phone (connected to WireGuard, DNS = 10.0.1.1)
+Phone (connected to WireGuard, DNS = 10.9.0.1)
   │
   │ Pi-hole resolves nextcloud.example.com → VPS public IP
-  │ or using local domain → 10.0.1.x
+  │ or using local domain → 10.9.0.x
   ▼
 Cloud VPS → Caddy → WireGuard tunnel
   │
@@ -148,7 +154,7 @@ These are observations for enhancing the existing `drawio.png` — no changes ha
 
 | # | Suggestion | Rationale |
 |---|-----------|-----------|
-| 1 | **Label overlay network subnets** (e.g., "WireGuard 10.0.1.0/24") | Makes the tunnel boundaries explicit |
+| 1 | **Label overlay network subnets** (e.g., "WireGuard 10.9.0.0/24") | Makes the tunnel boundaries explicit |
 | 2 | **Add a storage subsystem box** representing the 2×3TB HDDs + LVM | Currently storage is implicit; showing the LVM abstraction would clarify the disk layout |
 | 3 | **Show the Gluetun isolation boundary** as a dashed box around qBittorrent | Highlights the VPN namespace model vs regular bridge containers |
 | 4 | **Indicate port numbers** next to each container | Quick reference for which service runs on which port |

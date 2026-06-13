@@ -10,16 +10,18 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 ┌─────────────────────────────────────────────────┐
 │             Raspberry Pi 5 (Host)                │
 │                                                  │
-│  ┌──────────────┐    ┌──────────────────────┐   │
-│  │ infra_net     │    │ media_net            │   │
-│  │ (bridge)      │    │ (bridge)             │   │
-│  │               │    │                      │   │
-│  │  Homepage     │    │  Nextcloud (+DB,R)   │   │
-│  │  Portainer    │    │  Immich (+DB,R,ML)   │   │
-│  │  Uptime Kuma  │    │  Jellyfin            │   │
-│  │               │    │  Prowlarr            │   │
-│  │               │    │  Radarr              │   │
-│  └──────────────┘    └──────────────────────┘   │
+│  ┌──────────────┐    ┌──────────────────────────────┐   │
+│  │ infra_net     │    │ media_net                      │   │
+│  │ (bridge)      │    │ (bridge)                       │   │
+│  │               │    │                                │   │
+│  │  (*)Homepage  │    │  Nextcloud (+DB,R)             │   │
+│  │  Portainer    │    │  Immich (+DB,R,ML)             │   │
+│  │  Uptime Kuma  │    │  Matrix Synapse (+PG15)        │   │
+│  │               │    │  LiveKit Server (+RTC JWT)     │   │
+│  │               │    │  Jellyfin                      │   │
+│  │               │    │  Prowlarr                      │   │
+│  │               │    │  Radarr                        │   │
+│  └──────────────┘    └──────────────────────────────┘   │
 │                                                  │
 │  ┌──────────────────────────────────────────┐    │
 │  │  gluetun (container, NET_ADMIN)          │    │
@@ -32,10 +34,12 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 │  ┌──────────────────────────────────────────┐    │
 │  │  WireGuard client (wg0)                  │    │
 │  │  Connects to VPS WireGuard server        │    │
-│  │  IP: 10.0.1.x                            │    │
 │  └──────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────┘
+(*) Homepage on Pi is deprecated — Dashy on VPS is now the primary dashboard
 ```
+
+> **Note:** The primary dashboard has migrated from Homepage (Pi, `infra_net`) to Dashy (VPS, `vps_net`).
 
 ### Cloud VPS — Docker Networks
 
@@ -46,8 +50,9 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 │  ┌──────────────────────────────────────┐        │
 │  │  vps_net (bridge)                     │        │
 │  │                                       │        │
-│  │  Pi-hole (DNS, 10.0.1.x:53)          │        │
-│  │  Caddy      (80/443 → reverse proxy)  │        │
+│  │  Pi-hole (DNS, 10.9.0.x:53)          │        │
+│  │  Dashy (Dashboard, 10.9.0.x:8080)     │        │
+│  │  Vault Warden (Password Mgr, 10.9.0.x:8989) │
 │  └──────────────────────────────────────┘        │
 │                                                   │
 │  ┌──────────────────────────────────────────┐    │
@@ -70,6 +75,11 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 | Homepage | `[PLACEHOLDER]` | 3000 | 3000 | TCP | `infra_net` |
 | Portainer | `[PLACEHOLDER]` | 9000 | 9000 | TCP | `infra_net` |
 | Uptime Kuma | `[PLACEHOLDER]` | 3001 | 3001 | TCP | `infra_net` |
+| Matrix Synapse | `[PLACEHOLDER]` | 8008 | 8008 | TCP | `media_net` |
+| Matrix RTC JWT | `[PLACEHOLDER]` | 8081 | 8081 | TCP | `media_net` |
+| LiveKit (Signal) | `[PLACEHOLDER]` | 7880 | 7880 | TCP | `media_net` |
+| LiveKit (TURN/TCP) | `[PLACEHOLDER]` | 7881 | 7881 | TCP | `media_net` |
+| LiveKit (UDP media) | `[PLACEHOLDER]` | 50100-50200 | 50100-50200 | UDP | `media_net` |
 | Nextcloud | `[PLACEHOLDER]` | 8080 | 80 | TCP | `media_net` |
 | Immich | `[PLACEHOLDER]` | 2283 | 2283 | TCP | `media_net` |
 | Jellyfin | `[PLACEHOLDER]` | 8096 | 8096 | TCP | `media_net` |
@@ -82,10 +92,13 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 
 | Service | Host IP | Host Port | Container Port | Protocol | Network |
 |---------|---------|-----------|----------------|----------|---------|
-| Pi-hole (DNS) | WireGuard IP (`10.0.1.1`) | 53 | 53 | TCP+UDP | `vps_net` |
+
+| Pi-hole (DNS) | WireGuard IP (`10.9.0.1`) | 53 | 53 | TCP+UDP | `vps_net` |
 | Pi-hole (Admin) | `127.0.0.1` | 80 | 80 | TCP | `vps_net` |
 | Caddy (HTTP) | `0.0.0.0` | 80 | 80 | TCP | `vps_net` |
 | Caddy (HTTPS) | `0.0.0.0` | 443 | 443 | TCP | `vps_net` |
+| Dashy | VPS IP | 8080 | 80 | TCP | `vps_net` |
+| Vault Warden | VPS IP | 8989 | 80 | TCP | `vps_net` |
 
 ---
 
@@ -98,8 +111,7 @@ Two Docker hosts exist in this infrastructure, connected via the WireGuard overl
 | `infra_net` | `media_net` | **No** | Separate bridge networks |
 | `gluetun` | Internet | VPN tunnel (Surfshark) | All egress via WireGuard/OpenVPN |
 | `gluetun` | Pi WireGuard IP | Ports specified | qBittorrent Web UI accessible over WG |
-| Pi services | VPS (via WireGuard) | Specific ports | Caddy proxies: `10.0.1.x:PORT` |
-| VPS (Caddy) | Pi (via WireGuard) | Ports in Caddyfile | Reverse proxy traffic only |
+| Pi services | VPS (via WireGuard) | Specific ports | Caddy proxies: `10.9.0.x:PORT` |
 | VPS (Pi-hole) | WireGuard clients (peers) | `53/UDP`, `53/TCP` | DNS for all LAN devices over WG |
 | LAN devices | VPS WireGuard IP | `53/UDP` | DNS queries forwarded through WG tunnel |
 
@@ -115,16 +127,16 @@ VPS (port 443) → Caddy container
   │
   │ Matches domain → reverse proxy to Pi via WireGuard
   ▼
-WireGuard tunnel → 10.0.1.x:PORT
+WireGuard tunnel → 10.9.0.x:PORT
   │
-  ▼
 Pi Docker container (media_net / infra_net)
 ```
 
 ## Traffic Flow: Internal DNS
 
 ```
-LAN device → DNS = 10.0.1.1 (VPS WireGuard IP)
+
+LAN device → DNS = 10.9.0.1 (VPS WireGuard IP)
   │
   │ WireGuard tunnel
   ▼
