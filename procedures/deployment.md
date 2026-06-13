@@ -73,6 +73,7 @@ docker compose up -d <service-name>
 | Nextcloud | `v32` |
 | Immich | `v2.7.4` |
 | Jellyfin | `v10.11.8` |
+| Matrix Synapse | `latest` |
 | Pi-hole | `v6.4` |
 
 ---

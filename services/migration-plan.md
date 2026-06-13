@@ -98,12 +98,16 @@ These two services hold the most critical user data (file sync + photo library).
 
 | Service | Migration Priority | Method | Notes |
 |---------|-------------------|--------|-------|
+| Matrix Synapse | Medium | StatefulSet + PVC | Postgres-backed; migrate DB carefully; depends on LiveKit |
+| LiveKit Server | Medium | Deployment + PVC | Requires UDP port range (50100-50200) for WebRTC media |
 | Jellyfin | Medium | Deployment + PVC | Read-only media mount; keep `/mnt/lvm/media` as NFS PV |
 | Prowlarr | Medium | Deployment + PVC | Stateless config; easy to redeploy |
 | Radarr | Medium | Deployment + PVC | Depends on download path from qBittorrent |
 | qBittorrent + Gluetun | Low | Pod with sidecar (Gluetun) | Must keep VPN isolation model. k3s equivalent: Gluetun as init container or sidecar with `hostNetwork: true` + NET_ADMIN |
 | Pi-hole | Low | Deployment + hostNetwork | Needs host port 53; use DaemonSet or hostNetwork binding |
 | Homepage | Low | Deployment + ConfigMap | Stateless; easy to redeploy |
+| Dashy | Low | Deployment + ConfigMap | Stateless dashboard; replace Pi-hosted Homepage with VPS-hosted Dashy |
+| Vault Warden | Low | StatefulSet + PVC | Needs persistent DB volume; keep on VPS for security isolation |
 | Portainer | Consider dropping | N/A | k3s has built-in UI (Dashboard); Portainer no longer needed |
 | Uptime Kuma | Low | Deployment + PVC | Replace with Prometheus/Grafana in future (Roadmap Phase 3) |
 | Open WebUI + Ollama | Stays on Garuda | N/A | GPU passthrough to k3s is complex; keep on dedicated desktop |
