@@ -55,7 +55,7 @@ The ER605 is configured for **dual-ISP load balancing with automatic failover**.
 | Domain | Target IP | Notes |
 |--------|-----------|-------|
 | `pihole.aryadivap.com` | `10.9.0.1` | Local service resolution over WireGuard |
-| `Portainer` | `10.9.0.1` | VPS docker management |
+| `portainer` | `10.9.0.1` | VPS docker management |
 | `portainer-home` | `10.9.0.4` | Pi docker management |
 
 ### DHCP

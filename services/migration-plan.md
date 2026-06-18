@@ -12,12 +12,12 @@ This document outlines the phased migration from the current Docker Compose-base
 
 | Task | Details | Status |
 |------|---------|--------|
-| Provision k3s nodes | 3 nodes: [PLACEHOLDER: node specs and hostnames] | [ ] |
-| Install k3s | Multi-arch cluster with ARM64/AMD64 support | [ ] |
-| Set up storage class | Longhorn or local-path provisioner for PVCs | [ ] |
-| Set up ingress controller | Traefik (bundled with k3s) or Nginx Proxy Manager | [ ] |
-| Set up cert-manager | Let's Encrypt automated ACME certificates | [ ] |
-| Set up metallb | Load balancer IP pool (or use Traefik HostPort) | [ ] |
+| Provision k3s nodes | 3 nodes: MiniPC, Rpi and OrangePi | [x] |
+| Install k3s | Multi-arch cluster with ARM64/AMD64 support | [x] |
+| Set up storage class | Longhorn or local-path provisioner for PVCs | [x] |
+| Set up ingress controller | Traefik (bundled with k3s) or Nginx Proxy Manager | [x] |
+| Set up cert-manager | Let's Encrypt automated ACME certificates | [Y] |
+| Set up metallb | Load balancer IP pool (or use Traefik HostPort) | [x] |
 
 ---
 

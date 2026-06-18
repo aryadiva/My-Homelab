@@ -197,7 +197,7 @@ gluetun:
     VPN_TYPE: wireguard
     WIREGUARD_PRIVATE_KEY: "[PLACEHOLDER: Surfshark WireGuard key]"
     WIREGUARD_ADDRESSES: "[PLACEHOLDER: Surfshark assigned IP]"
-    SERVER_REGIONS: "[PLACEHOLDER: e.g., Australia]"
+    SERVER_REGIONS: "Singapore"
   cap_add:
     - NET_ADMIN
   restart: unless-stopped
