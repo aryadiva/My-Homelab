@@ -105,8 +105,6 @@ NEXTCLOUD_DB_PASSWORD=your_password_here
 IMMICH_DB_PASSWORD=your_password_here
 PIHOLE_WEBPASSWORD=your_password_here
 WIREGUARD_PRIVATE_KEY=your_key_here
-PUID=1000
-PGID=1000
 TZ=Asia/Jakarta
 ```
 

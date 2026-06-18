@@ -111,7 +111,7 @@ The infrastructure hosts an array of containerized applications segmenting media
 
 ### Application Delivery & Management
 *   **Dashy:** Centralized dashboard acting as the unified single-pane-of-glass application portal, hosted on the VPS as a self-contained Docker container with dynamic YAML-based configuration, accessed at `home.aryadivap.com`.
-*   **Portainer CE:** Multi-cluster container management platform deployed agentless to oversee workloads across both local and VPS engines.
+*   **Portainer CE:** Multi-cluster container management platform deployed agentless on both the VPS (at `portainer.aryadivap.com`) and Raspberry Pi (at `portainer-home.aryadivap.com`).
 
 ### Storage & Identity Asset Management
 *   **Nextcloud Hub:** High-availability self-hosted productivity suite utilized for automated file synchronization and cross-device document backups.
@@ -131,7 +131,7 @@ The infrastructure hosts an array of containerized applications segmenting media
 *   **Pi-hole:** Network-wide upstream DNS sinkhole hosted on the VPS. All LAN devices route DNS queries through the WireGuard tunnel to Pi-hole for ad-blocking and local DNS resolution.
 *   **Caddy:** Automated HTTPS reverse proxy on the VPS, proxying public subdomains to Pi services over the WireGuard tunnel.
 *   **Vault Warden:** Self-hosted, privacy-first password manager (Bitwarden-compatible) deployed on the VPS for secure credential storage and cross-device sync, accessed at `vault.aryadivap.com`.
-*   **Uptime Kuma:** State-driven HTTP/TCP/Ping monitoring solution providing real-time alerts on container availability and network latencies.
+*   **Uptime Kuma:** State-driven HTTP/TCP/Ping monitoring solution hosted on the VPS, providing real-time alerts on container availability and network latencies.
 
 ### Core AI & Compute Offloading
 *   **Open WebUI:** Front-end orchestration interface hosted separately on an advanced Garuda Arch Linux desktop node. It offloads highly parallelized Large Language Model (LLM) inference processes to a dedicated GPU via the Ollama API runtime.

@@ -8,7 +8,7 @@ Containers are organized into logical groups. Each group shares a Docker bridge 
 
 | Group | Network | Includes |
 |-------|---------|----------|
-| Infrastructure | `infra_net` | Homepage, Portainer, Uptime Kuma |
+| Infrastructure | `infra_net` | Homepage, Portainer |
 | Media/Storage | `media_net` | Nextcloud, Immich, Matrix Synapse, LiveKit, Jellyfin, Prowlarr, Radarr |
 | VPN-Isolated | `gluetun` | qBittorrent (shares Gluetun network namespace) |
 
@@ -16,16 +16,20 @@ Containers are organized into logical groups. Each group shares a Docker bridge 
 
 | Group | Network | Includes |
 |-------|---------|----------|
-| VPS Services | `vps_net` | Pi-hole, Caddy, Dashy, Vault Warden |
+| VPS Services | `vps_net` | Pi-hole, Caddy, Dashy, Vault Warden, Portainer, Uptime Kuma |
 | WireGuard | Host-level | WireGuard runs natively on the VPS (not in Docker) |
 
 ---
 
 ## Compose File Structure
 
-[PLACEHOLDER: Confirm if you use a single `docker-compose.yml` with all services, or split across multiple files (e.g., `infra.yml`, `media.yml`)]
+Services are split across multiple Docker Compose files:
+- **`infra.yml`** — Infrastructure services (Homepage, Portainer on Pi)
+- **`media.yml`** — Media/storage services (Nextcloud, Immich, Matrix, LiveKit, Jellyfin, Prowlarr, Radarr on Pi)
+- **`vpn.yml`** — VPN-isolated services (Gluetun + qBittorrent on Pi)
+- **`vps.yml`** — VPS-hosted services (Pi-hole, Caddy, Dashy, Vault Warden, Portainer, Uptime Kuma on VPS)
 
-Below are representative Compose snippets for each service based on common configurations. Adjust paths, versions, and environment variables to match your actual setup.
+Below are representative Compose snippets for each service. Adjust paths, versions, and environment variables to match your actual setup.
 
 ---
 
@@ -38,7 +42,7 @@ homepage:
   image: ghcr.io/gethomepage/homepage:latest
   container_name: homepage
   ports:
-    - "[PLACEHOLDER_HOST_IP]:3000:3000"
+    - "10.9.0.4:3000:3000"
   volumes:
     - ./homepage/config:/app/config
     - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -54,25 +58,10 @@ portainer:
   image: portainer/portainer-ce:latest
   container_name: portainer
   ports:
-    - "[PLACEHOLDER_HOST_IP]:9000:9000"
+    - "10.9.0.4:9000:9000"
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock:ro
     - ./portainer/data:/data
-  restart: unless-stopped
-  networks:
-    - infra_net
-```
-
-#### Uptime Kuma
-
-```yaml
-uptime-kuma:
-  image: louislam/uptime-kuma:latest
-  container_name: uptime-kuma
-  ports:
-    - "[PLACEHOLDER_HOST_IP]:3001:3001"
-  volumes:
-    - ./uptime-kuma/data:/app/data
   restart: unless-stopped
   networks:
     - infra_net
@@ -89,7 +78,7 @@ nextcloud:
   image: nextcloud:stable
   container_name: nextcloud
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8080:80"
+    - "10.9.0.4:8080:80"
   volumes:
     - /mnt/lvm/nextcloud/data:/var/www/html/data
     - ./nextcloud/config:/var/www/html/config
@@ -135,7 +124,7 @@ immich-server:
   image: ghcr.io/immich-app/immich-server:release
   container_name: immich-server
   ports:
-    - "[PLACEHOLDER_HOST_IP]:2283:2283"
+    - "10.9.0.4:2283:2283"
   volumes:
     - /mnt/lvm/immich/photos:/usr/src/app/upload
     - ./immich/config:/usr/src/app/config
@@ -218,7 +207,7 @@ synapse:
   image: matrixdotorg/synapse:latest
   container_name: synapse
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8008:8008"
+    - "10.9.0.4:8008:8008"
   volumes:
     - ./synapse/data:/data
     - ./synapse/config:/etc/matrix-synapse
@@ -252,7 +241,7 @@ matrix-rtc-jwt:
   image: ghcr.io/matrix-org/matrix-rtc-jwt:latest
   container_name: matrix-rtc-jwt
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8081:8081"
+    - "10.9.0.4:8081:8081"
   volumes:
     - ./synapse/rtc-jwt:/config
   restart: unless-stopped
@@ -263,9 +252,9 @@ livekit-server:
   image: livekit/livekit-server:latest
   container_name: livekit-server
   ports:
-    - "[PLACEHOLDER_HOST_IP]:7880:7880"
-    - "[PLACEHOLDER_HOST_IP]:7881:7881"
-    - "[PLACEHOLDER_HOST_IP]:50100-50200:50100-50200/udp"
+    - "10.9.0.4:7880:7880"
+    - "10.9.0.4:7881:7881"
+    - "10.9.0.4:50100-50200:50100-50200/udp"
   volumes:
     - ./synapse/livekit:/etc/livekit
   restart: unless-stopped
@@ -281,7 +270,7 @@ jellyfin:
   image: jellyfin/jellyfin:latest
   container_name: jellyfin
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8096:8096"
+    - "10.9.0.4:8096:8096"
   volumes:
     - ./jellyfin/config:/config
     - ./jellyfin/cache:/cache
@@ -300,13 +289,11 @@ prowlarr:
   image: lscr.io/linuxserver/prowlarr:latest
   container_name: prowlarr
   ports:
-    - "[PLACEHOLDER_HOST_IP]:9696:9696"
+    - "10.9.0.4:9696:9696"
   volumes:
     - ./prowlarr/config:/config
   environment:
-    PUID: "[PLACEHOLDER]"
-    PGID: "[PLACEHOLDER]"
-    TZ: "[PLACEHOLDER: timezone]"
+    TZ: "Asia/Jakarta"
   restart: unless-stopped
   networks:
     - media_net
@@ -319,15 +306,13 @@ radarr:
   image: lscr.io/linuxserver/radarr:latest
   container_name: radarr
   ports:
-    - "[PLACEHOLDER_HOST_IP]:7878:7878"
+    - "10.9.0.4:7878:7878"
   volumes:
     - ./radarr/config:/config
     - /mnt/lvm/media/movies:/movies
     - /mnt/lvm/downloads:/downloads
   environment:
-    PUID: "[PLACEHOLDER]"
-    PGID: "[PLACEHOLDER]"
-    TZ: "[PLACEHOLDER: timezone]"
+    TZ: "Asia/Jakarta"
   restart: unless-stopped
   networks:
     - media_net
@@ -344,7 +329,7 @@ gluetun:
   image: qmcgaw/gluetun:latest
   container_name: gluetun
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8080:8080"  # qBittorrent Web UI
+    - "10.9.0.4:8080:8080"  # qBittorrent Web UI
   volumes:
     - ./gluetun/config:/gluetun
   environment:
@@ -365,9 +350,7 @@ qbittorrent:
     - ./qbittorrent/config:/config
     - /mnt/lvm/downloads:/downloads
   environment:
-    PUID: "[PLACEHOLDER]"
-    PGID: "[PLACEHOLDER]"
-    TZ: "[PLACEHOLDER: timezone]"
+    TZ: "Asia/Jakarta"
     UMASK: "002"
   depends_on:
     gluetun:
@@ -386,23 +369,22 @@ pihole:
   image: pihole/pihole:latest
   container_name: pihole
   ports:
-
-
     - "10.9.0.1:53:53/tcp"
     - "10.9.0.1:53:53/udp"
     - "127.0.0.1:80:80/tcp"
   environment:
-    TZ: "[PLACEHOLDER: timezone]"
+    TZ: "Asia/Jakarta"
     WEBPASSWORD: "[PLACEHOLDER: admin password]"
-    PIHOLE_DNS_: "[PLACEHOLDER: upstream DNS, e.g., 1.1.1.1;1.0.0.1]"
+    PIHOLE_DNS_: "1.1.1.1;1.0.0.1"
     DNSSEC: "true"
     CONDITIONAL_FORWARDING: "false"
   volumes:
     - ./pihole/config:/etc/pihole
     - ./pihole/dnsmasq:/etc/dnsmasq.d
   restart: unless-stopped
+  networks:
     vps_net:
-      ipv4_address: "10.9.0.x"  # [PLACEHOLDER: pick an IP in the WG subnet]
+      ipv4_address: "10.9.0.1"
 ```
 
 #### Dashy
@@ -412,7 +394,7 @@ dashy:
   image: lissy93/dashy:latest
   container_name: dashy
   ports:
-    - "[PLACEHOLDER_VPS_IP]:8080:80"
+    - "10.9.0.1:8080:80"
   volumes:
     - ./dashy/conf.yml:/app/public/conf.yml
     - ./dashy/icons:/app/public/item-icons
@@ -428,12 +410,43 @@ vaultwarden:
   image: vaultwarden/server:latest
   container_name: vaultwarden
   ports:
-    - "[PLACEHOLDER_VPS_IP]:8989:80"
+    - "10.9.0.1:8989:80"
   volumes:
     - ./vaultwarden/data:/data
   environment:
     SIGNUPS_ALLOWED: "false"    # Disable after creating accounts
     ADMIN_TOKEN: "[PLACEHOLDER: strong admin token]"
+  restart: unless-stopped
+  networks:
+    - vps_net
+```
+
+#### Portainer (VPS instance)
+
+```yaml
+portainer-vps:
+  image: portainer/portainer-ce:latest
+  container_name: portainer-vps
+  ports:
+    - "10.9.0.1:9000:9000"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./portainer-vps/data:/data
+  restart: unless-stopped
+  networks:
+    - vps_net
+```
+
+#### Uptime Kuma
+
+```yaml
+uptime-kuma-vps:
+  image: louislam/uptime-kuma:latest
+  container_name: uptime-kuma-vps
+  ports:
+    - "10.9.0.1:3001:3001"
+  volumes:
+    - ./uptime-kuma-vps/data:/app/data
   restart: unless-stopped
   networks:
     - vps_net
@@ -459,15 +472,18 @@ caddy:
 
 **Caddyfile example:**
 
-```
-    reverse_proxy http://10.9.0.x:8096
+```caddy
+jellyfin.aryadivap.com {
+    reverse_proxy http://10.9.0.4:8096
 }
 
-nextcloud.example.com {
+nextcloud.aryadivap.com {
+    reverse_proxy http://10.9.0.4:8080
 }
 
-immich.example.com {
-    reverse_proxy http://10.9.0.x:2283
+immich.aryadivap.com {
+    reverse_proxy http://10.9.0.4:2283
+}
 ```
 
 ---

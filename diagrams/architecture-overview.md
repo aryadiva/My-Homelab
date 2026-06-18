@@ -25,14 +25,20 @@ Cloud VPS (public edge)
     ├── Vault Warden (8989, VPS IP)
     │     └── Self-hosted Bitwarden-compatible password manager
     │
+    ├── Uptime Kuma (3001, VPS IP)
+    │     └── HTTP/TCP/Ping monitoring for all services
+    │
     ├── Pi-hole DNS (53)
     │     └── Resolves/filters DNS for all LAN devices
+    │
+    ├── Portainer (9000, VPS IP)
+    │     └── Container management for VPS Docker
     │
     └── WireGuard server (wg0, 10.9.0.1)
           │
           ├── Raspberry Pi 5 (client, 10.9.0.4)
           │     ├── Docker Engine
-          │     │     ├── Infrastructure (Portainer, Homepage, Uptime Kuma)
+          │     │     ├── Infrastructure (Portainer, Homepage)
           │     │     ├── Media/Storage (Nextcloud, Immich, Jellyfin, Radarr, Prowlarr, Matrix Synapse, LiveKit)
           │     │     └── VPN-Isolated (Gluetun → qBittorrent)
           │     │
@@ -62,7 +68,7 @@ LAN device ──WireGuard── VPS (server) ──WireGuard── Pi/Garuda
 | Raspberry Pi 5 | On-premises compute | ARM64, 8GB, 6TB storage, WireGuard client |
 | LVM storage pool | `/mnt/lvm` | 2×3TB HDDs combined via LVM |
 | Docker containers (Pi) | All services | Split across 3 network zones |
-| Docker containers (VPS) | Pi-hole + Caddy | DNS and reverse proxy |
+| Docker containers (VPS) | Pi-hole, Caddy, Dashy, Vault Warden, Portainer, Uptime Kuma | DNS, reverse proxy, and management services |
 | WireGuard icon | `wg0` server/client | `10.9.0.0/24` subnet, VPS is server |
 | Tailscale icon | Fallback mesh | Out-of-band admin access |
 | ER605 router | TP-Link Omada ER605 | Dual-ISP load balancing, NO port forwarding |

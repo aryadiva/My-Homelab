@@ -1,17 +1,14 @@
-# Network Topology
-
 ## Physical Topology
 
 ### WAN
 - **Gateway:** TP-Link Omada ER605 Gigabit VPN Router
-- **WAN Configuration:** Dual-ISP load balancing. ISP A is the primary active connection; ISP B is configured as backup/failover. Traffic is distributed across both links by usage, with automatic failover if one ISP goes down.
-- **ISPs:** [PLACEHOLDER: provider names and speeds]
-
+- **WAN Configuration:** Dual-ISP load balancing with automatic failover. ISP A (**Ovall**) is bound as the primary active connection; ISP B (**Bnet**) is configured as backup/failover. Traffic is distributed across both links by usage, with automatic failover if one ISP goes down.
+- **ISPs:** Ovall (primary), Bnet (backup)
+- **Note:** The ER605 is fully isolated from WireGuard overlay networks. It handles only local WAN/LAN routing — no port forwarding to VPS or WG subnets.
 ### LAN
 - **Switching:** Managed Layer 2/3 switch fabric
-- **Primary Subnet:** `10.9.0.0/24`
-- **DHCP:** N/A
-
+- **Primary Subnet:** `192.168.10.0/24` (physical LAN)
+- **DHCP:** ER605 handles DHCP for the physical LAN
 ### Hosts
 | Host | Role | Connection |
 |------|------|------------|
@@ -24,10 +21,10 @@
 ## Overlay Network
 
 ### Primary Tunnel — WireGuard (Server / Client)
-- **Architecture:** VPS acts as the **WireGuard server**. All LAN devices (Pi, Garuda Desktop, laptops) are **WireGuard clients** that connect to the VPS.
+- **Architecture:** VPS acts as the **WireGuard server**. All LAN devices (Pi, Garuda Desktop, laptops, phones) are **WireGuard clients** that connect to the VPS.
 - **VPS Role:** WireGuard server routes traffic between peers, enabling LAN devices to communicate securely through the encrypted overlay.
 - **Subnet:** `10.9.0.0/24`
-- **VPS Listen Port:** 58120
+- **VPS Listen Port:** `51820`/UDP
 
 ### Fallback Tunnel — Tailscale
 - **Type:** CGNAT-traversing mesh overlay
@@ -40,15 +37,16 @@
 
 - **Hosted on:** Cloud VPS
 - **Role:** Terminates public HTTPS requests (subdomains pointing to VPS IP) and proxies them through the WireGuard tunnel to the appropriate service on the Raspberry Pi.
-- **Domains:** Each subdomain (e.g., `jellyfin.example.com`) has a Cloudflare A record pointing to the VPS public IP. Caddy on the VPS matches the domain and proxies to `http://10.9.0.x:PORT` on the Pi.
+- **Domains:** Each subdomain (e.g., `jellyfin.aryadivap.com`) has a Cloudflare A record pointing to the VPS public IP. Caddy on the VPS matches the domain and proxies to `http://10.9.0.x:PORT` on the Pi.
+- **VPS-hosted services (Dashy, Vault Warden):** Proxied locally on the VPS without traversing the tunnel.
 
 ---
 
 ## DNS (Pi-hole)
 
 - **Hosted on:** Cloud VPS as a Docker container
-- **DNS for LAN:** All LAN devices and the Raspberry Pi are configured to use the VPS WireGuard IP as their DNS server. Queries are forwarded through the WireGuard tunnel to the VPS, where Pi-hole resolves and filters them.
-- **Upstream DNS:** Cloudflare 1.1.1.1 & Quad9 9.9.9.9
+- **DNS for LAN:** All LAN devices and the Raspberry Pi are configured to use the VPS WireGuard IP (`10.9.0.1`) as their DNS server. Queries are forwarded through the WireGuard tunnel to the VPS, where Pi-hole resolves and filters them.
+- **Upstream DNS:** Cloudflare `1.1.1.1` & Quad9 `9.9.9.9`
 
 ---
 
@@ -56,49 +54,4 @@
 
 ### External Access (Internet → Service)
 
-```
-User
-  │
-  │ DNS: jellyfin.example.com → Cloudflare A record → VPS Public IP
-  ▼
-Cloud VPS
-  │
-  ├── Caddy reverse proxy (matches domain)
-  │
-  └── WireGuard tunnel → 10.9.0.x:PORT
-         │
-         ▼
-      Raspberry Pi 5 (Docker container)
-```
 
-### Internal DNS Flow (LAN Device → Internet)
-
-```
-LAN Device
-  │
-  │ DNS = VPS WireGuard IP (10.9.0.1)
-  │
-  └── WireGuard tunnel
-         │
-         ▼
-      Cloud VPS → Pi-hole container → Upstream DNS
-```
-
-### LAN Peer Communication
-
-```
-LAN Device (WireGuard client)
-  │
-  │ WG tunnel → VPS (server)
-  │ VPS routes traffic to other peers
-  │
-  └── Raspberry Pi 5 (WireGuard client)
-         │
-         └── Docker services
-```
-
----
-
-## Reference Diagram
-
-See [`../diagrams/Updated Homelab Architecture v3.drawio.png`](../diagrams/Updated%20Homelab%20Architecture%20v3.drawio.png) for the visual network topology.

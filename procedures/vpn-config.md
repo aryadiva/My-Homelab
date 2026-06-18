@@ -116,7 +116,7 @@ AllowedIPs = 10.9.0.0/24
 PersistentKeepalive = 25
 ```
 
-> **Note:** If you want to route all device traffic through the VPS (full-tunnel -> **not recommended**), change `AllowedIPs` to `0.0.0.0/0, ::/0`. The current config uses split-tunnel (only WireGuard subnet traffic goes through the tunnel).
+> **Note:** If you want to route all device traffic through the VPS (full-tunnel -> **not recommended**), change `AllowedIPs` to `0.0.0.0/0, ::/0`. The current config uses split-tunnel (only WireGuard subnet traffic goes through the tunnel) = More secure.
 
 ### Key Generation
 
@@ -189,14 +189,14 @@ gluetun:
   image: qmcgaw/gluetun:latest
   container_name: gluetun
   ports:
-    - "[PLACEHOLDER_HOST_IP]:8080:8080"
+    - "10.9.0.4:8080:8080"
   volumes:
     - ./gluetun/config:/gluetun
   environment:
     VPN_SERVICE_PROVIDER: surfshark
     VPN_TYPE: wireguard
-    WIREGUARD_PRIVATE_KEY: "[PLACEHOLDER]"
-    WIREGUARD_ADDRESSES: "[PLACEHOLDER]"
+    WIREGUARD_PRIVATE_KEY: "[PLACEHOLDER: Surfshark WireGuard key]"
+    WIREGUARD_ADDRESSES: "[PLACEHOLDER: Surfshark assigned IP]"
     SERVER_REGIONS: "[PLACEHOLDER: e.g., Australia]"
   cap_add:
     - NET_ADMIN
@@ -210,9 +210,7 @@ qbittorrent:
     - ./qbittorrent/config:/config
     - /mnt/lvm/downloads:/downloads
   environment:
-    PUID: "[PLACEHOLDER]"
-    PGID: "[PLACEHOLDER]"
-    TZ: "[PLACEHOLDER: timezone]"
+    TZ: "Asia/Jakarta"
     UMASK: "002"
   depends_on:
     gluetun:
