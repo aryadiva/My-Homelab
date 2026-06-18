@@ -1,6 +1,6 @@
 # Backup & Restore Procedures — Future Plan
 
-## ⚠️ Current Status: **No Active Backup Plan!**
+## ⚠️ Current Status: **No Active Backup Plan yet!**
 
 This document serves as a **blueprint for a future backup strategy**. No automated backups, cron jobs, or off-site replication are currently configured. The scripts and schedules below are **planned work items** — nothing is running in production yet.
 

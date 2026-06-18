@@ -151,26 +151,3 @@ Raspberry Pi 5 → Nextcloud
   ▼
 /mnt/lvm/nextcloud/data
 ```
-
----
-
-## Suggested Improvements for the Diagram
-
-These are observations for enhancing the existing `drawio.png` — no changes have been made to the file.
-
-| # | Suggestion | Rationale |
-|---|-----------|-----------|
-| 1 | **Label overlay network subnets** (e.g., "WireGuard 10.9.0.0/24") | Makes the tunnel boundaries explicit |
-| 2 | **Add a storage subsystem box** representing the 2×3TB HDDs + LVM | Currently storage is implicit; showing the LVM abstraction would clarify the disk layout |
-| 3 | **Show the Gluetun isolation boundary** as a dashed box around qBittorrent | Highlights the VPN namespace model vs regular bridge containers |
-| 4 | **Indicate port numbers** next to each container | Quick reference for which service runs on which port |
-| 5 | **Add Tailscale as a separate cloud icon** with a dashed line labeled "fallback" | Clarifies that Tailscale is a secondary path, not primary |
-| 6 | **Show Garuda Desktop** as a LAN-connected node with a GPU icon and "Ollama" label | Currently the diagram may not account for the AI compute offloading node |
-| 7 | **Add a legend** for line styles (solid = wire, dashed = overlay, dotted = admin) | Reduces ambiguity about connection types |
-| 8 | **Add VPS services box** showing Caddy + Pi-hole | Currently the VPS role is underrepresented in the diagram |
-| 9 | **Show WireGuard as host-native on VPS** (not inside Docker) | Clarifies that WG runs at the system level, not containerized |
-| 10 | **Label ER605 as "Load Balancing Only — No Port Forwarding"** | Important architectural detail for security understanding |
-
----
-
-> **Note:** The actual `.drawio.png` file is maintained separately. If you want me to generate a new `.drawio` editable source from these notes, I can create a blank `network.drawio` file for you to edit in diagrams.net.
