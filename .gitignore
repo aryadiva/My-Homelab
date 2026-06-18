@@ -1,0 +1,25 @@
+# Sensitive / live config files
+temp.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE/editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Continue AI config
+.continue/
+
+# Diagram source files (exported PNG is tracked)
+*.drawio
+
+# Environment / secret files (if any)
+.env
+*.env.local
+*.env.*.local
