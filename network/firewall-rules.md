@@ -1,82 +1,110 @@
-# Firewall Rules
+# Firewall Rules — Synced 2026-11-16
 
-## ER605 (Hardware Gateway) — Load Balancing & Failover
+> Values from historical docs and KB; verify against live state on VPS before making changes.
 
-The ER605 is configured for **dual-ISP load balancing with automatic failover**. No inbound port forwarding is configured at the ER605 level — all external access is handled through the cloud VPS. The ER605 is fully isolated from WireGuard overlay networks and only handles physical WAN/LAN routing.
+---
+
+## ER605 Router (Hardware Gateway)
+
+**Role:** Dual-ISP load balancing, failover, DNS upstream forwarding  
+**Note:** ER605 is fully isolated from WireGuard overlay network  
+CGNAT applies — no inbound port forwarding on the home network itself; all external access routes through VPS.
 
 ### WAN Policy
-| ISP | Role | Weight | Notes |
-|-----|------|--------|-------|
-| **Ovall** (ISP A) | Primary (active) | 1 | Handles the majority of traffic |
-| **Bnet** (ISP B) | Backup/failover | 1 | Takes over if ISP A goes down |
 
-### Load Balancing Mode
-- **Algorithm:** Online Backup
-- **Failover Detection:** Ping to `8.8.8.8` and `1.1.1.1` on both WANs
+| Rule # | Source  | Destination | Port   | Protocol | Action     | Notes                          |
+|--------|---------|-------------|--------|----------|------------|--------------------------------|
+| 1      | Any     | ER605 WAN   | \-     | ICMP     | Allow      | Ping for monitoring            |
+| 2      | Any     | `0.0.0.0/0` | All    | TCP+UDP  | Deny       | Default deny inbound           |
+| 3      | Any     | ER605 WAN   | All    | TCP+UDP  | Allow      | Outbound traffic               |
 
-### WAN Rules
-| Rule # | Direction | Source | Destination | Port/Protocol | Action | Notes |
-|--------|-----------|--------|-------------|---------------|--------|-------|
-| 1 | Inbound | Any | ER605 WAN | ICMP | Allow | Ping for monitoring |
-| 2 | Inbound | Any | Any | All | Deny | Default deny all inbound — no port forwards |
-| 3 | Outbound | Any | ER605 WAN | All | Allow | For connection |
+### Load Balancing / Failover
 
-> **Note:** There are **no port forwarding rules** on the ER605. All public ingress goes through the VPS.
+- **ISP A (Ovall):** Primary active link (confirmed by old docs)
+- **ISP B (Bnet):** Backup/failover when ISP A down
+- **Algorithm:** Online backup with ping to `8.8.8.8` + `1.1.1.1` on both ISPs
 
-### LAN Rules
-| Rule # | Direction | Source | Destination | Port/Protocol | Action | Notes |
-|--------|-----------|--------|-------------|---------------|-------|-------|
-| 1 | Inbound | LAN | Any | All | Allow | Default LAN access |
+> ⚠️ This configuration exists but is not verified in the current KB snapshot. Verify before changes.
 
 ---
 
-## Cloud VPS Firewall
+## Cloud VPS — UFW Configuration
 
-| Rule | Source | Destination | Port | Protocol | Notes |
-|------|--------|-------------|------|----------|-------|
-| 1 | Any | VPS | `51820` | UDP | WireGuard listen port |
-| 2 | Any | VPS | `443` | TCP | HTTPS — Caddy reverse proxy |
-| 3 | Any | VPS | `80` | TCP | HTTP — Caddy redirect to HTTPS |
-| 4 | WireGuard subnet (`10.9.0.0/24`) | VPS internal | All | Any | Allow tunnel traffic |
-| 5 | Any | VPS | All | Any | Deny all other inbound |
+**Default policies:**
+- Incoming: Deny  
+- Outgoing: Allow  
+- Forwarded/routed traffic: Allow  
 
----
+### Allowed Rules Summary
 
-## Pi-hole (DNS Sinkhole — hosted on VPS)
+| Source IP / Network | Destination | Port   | Protocol | Notes                                   |
+|---------------------|-------------|--------|----------|-----------------------------------------|
+| Any                 | VPS         | 51820  | UDP      | WireGuard listen port                   |
+| Any                 | VPS         | 443    | TCP+UDP  | HTTPS and HTTP/3 (QUIC) for Caddy       |
+| Any                 | VPS         | 80     | TCP      | HTTP redirect to HTTPS                  |
+| `10.9.0.0/24`       | Any         | All    | All      | WireGuard internal overlay traffic      |
+| Any                 | Any         | All    | All      | **Not allowed**                         |
 
-### Blocklists
-- Active Blocklists: 
-    - StevenBlack
-    - OISD
-    - Hagezi
-    - urlhaus.abuse.ch
+### SSH Rate Limiting
 
-### Local DNS Rewrites
-| Domain | Target IP | Notes |
-|--------|-----------|-------|
-| `pihole.aryadivap.com` | `10.9.0.1` | Local service resolution over WireGuard |
-| `portainer` | `10.9.0.1` | VPS docker management |
-| `portainer-home` | `10.9.0.4` | Pi docker management |
-
-### DHCP
-- Use static IP (DHCP disabled for LAN).
-- Pi-hole is used exclusively for DNS filtering.
+- Port `22/tcp`: `LIMIT` action for rate-limiting (UFW built-in protection)
 
 ---
 
-## Container-Level Firewall / Network Isolation (Raspberry Pi 5)
+## Docker-Level Firewall & Isolation
 
-### Gluetun VPN Namespace
-- **Policy:** qBittorrent is bound to Gluetun's network namespace — no direct host network access
-- **Kill Switch:** Enabled (traffic drops if VPN disconnects)
-- **Allowed Subnets:** `10.9.0.0/24` (LAN + WireGuard access for Web UI)
+### VPS Docker Services Binding
 
-### Docker Bridge Networks
-- Containers on the same Docker bridge network can communicate freely.
+Services on the VPS (Caddy, Dashy, Vaultwarden, Portainer, Uptime Kuma) bind to **WireGuard IP (`10.9.0.1`)** instead of `0.0.0.0`. Reduces exposure surface per security guidance in KB.
+
+### Raspberry Pi 5 Docker Bridge Networks
+
+| Network Name    | Purpose              | Notes                                  |
+|-----------------|----------------------|----------------------------------------|
+| `infra_net`     | Infrastructure       | Portainer Server, deprecated Homepage  |
+| `media_net`     | Media / Data services| Nextcloud, Immich, Matrix, Jellyfin    |
+| `gluetun`       | VPN isolated         | qBittorrent (shares namespace with Gluetun container) |
+
+- Containers on the same bridge network can communicate freely.
 - Cross-network communication is restricted unless explicitly routed.
-- See [`../services/container-network-map.md`](../services/container-network-map.md) for detailed network isolation per container.
+
+## Pi-hole (on VPS) — DNS Sinkhole Policy (Reference)
+
+### Active Blocklists (Historical)
+
+- StevenBlack  
+- OISD  
+- Hagezi  
+- urlhaus.abuse.ch  
+
+### Local Resolution Example
+
+| Domain              | Rewritten To    | Purpose                      |
+|---------------------|-----------------|------------------------------|
+| `pihole.aryadivap.com` | VPS 127.0.0.1:80 | Pi-hole admin page proxy     |
+
+> Blocklist and local resolution rules are for reference — verify with Pi-hole dashboard (status → blocklists) and DNS testing on LAN devices.
 
 ---
 
-> **Note:** Actual rule IDs and specific port numbers are replaced with placeholders for security. Adjust based on your ER605 and VPS firewall configuration.
+## Container-Level Firewall Policies (qBittorrent + Gluetun)
+
+| Policy                               | Rule                                           | Notes                                    |
+|--------------------------------------|------------------------------------------------|------------------------------------------|
+| qBittorrent network namespace        | Share with Gluetun (`network_mode: service:gluetun`) | Inherits Gluetun's VPN tunnel            |
+| Kill switch                          | Enabled                                         | Drops traffic if VPN disconnects         |
+| Allowed subnets on gluetun peer      | `10.9.0.0/24`                                   | Web UI accessible over WireGuard         |
+
+See [`services/container-network-map.md`](container-network-map.md) for port maps.
+
+---
+
+## Security Services on VPS (Reference)
+
+| Service       | Function                            | Notes                                       |
+|---------------|-------------------------------------|---------------------------------------------|
+| CrowdSec      | Log acquisition + bouncer           | Previously logged connection refused errors. Verify current integration with `fail2ban`. |
+| fail2ban         | Ban enforcement                      | Works alongside CrowdSec (verify active policy) |
+
+Verify current CrowdSec/fail2ban state with: `sudo systemctl status crowdsec`, `sudo fail2ban-client status all` on VPS.
 

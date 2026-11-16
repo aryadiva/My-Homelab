@@ -1,299 +1,129 @@
-# VPN Configuration
+# VPN Configuration — WireGuard Primary (Synced 2026-11-16)
 
-## Overview
+### Overview
 
-Three VPN layers exist in this infrastructure:
+1. **WireGuard** is the primary overlay network for private communication across hosts and services.
+   - Server: Cloud VPS (`wg0`, `10.9.0.1/24`)
+   - Peers: Raspberry Pi 5, Orange Pi, H81 (if enabled), Garuda desktop, Spectre x360, mobile devices
 
-1. **WireGuard** — VPS is the WireGuard server; all LAN devices (Pi, Garuda, laptops) are clients connecting through it for secure overlay networking and service access.
-2. **Tailscale** — Fallback CGNAT-traversing mesh for out-of-band admin access.
-3. **Gluetun (Surfshark)** — Commercial VPN for torrent traffic isolation on the Pi.
+2. **Tailscale** (historical) — Fallback mesh overlay for CGNAT-traversing admin access only when needed. Not confirmed active in current state.
+
+3. **Gluetun**— Commercial VPN container for torrents on Pi to isolate torrent IP from home network.
 
 ---
 
-## 1. WireGuard (VPS Server / LAN Clients)
+## WireGuard Server Config (VPS `/etc/wireguard/wg0.conf`)
 
-### Architecture
-
-```
-Cloud VPS (public IP) ─── WireGuard Server (10.9.0.1)
-      │
-      ├── Raspberry Pi 5 (client)      ─── 10.9.0.x
-      ├── Garuda Desktop (client)      ─── 10.9.0.x
-      ├── Laptop / Phone (client)      ─── 10.9.0.x
-      └── ... other LAN devices
-```
-
-The VPS runs the WireGuard server natively (not in Docker). All other devices run WireGuard as clients and connect to the VPS. The VPS routes traffic between peers and provides access to Pi-hole DNS and Caddy-proxied services.
-
-### VPS Configuration (`/etc/wireguard/wg0.conf`)
+> ⚠️ Below are structure examples only — never store real keys here. Rotate all keys periodically and verify connectivity after changes.
 
 ```
 [Interface]
 Address = 10.9.0.1/24
 ListenPort = 51820
-PrivateKey = [VPS private key]
+PrivateKey = [PLACEHOLDER: VPS_PRIVATE_KEY]
 
-# Allow traffic to reach your home LAN later (we'll add this line in step 6)
-PostUp = iptables -A FORWARD -i %i -o eth0 -j ACCEPT
-PostUp = iptables -A FORWARD -i eth0 -o %i -j ACCEPT
-PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -o eth0 -j ACCEPT
-PostDown = iptables -D FORWARD -i eth0 -o %i -j ACCEPT
-PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+# Routing to local home LAN (may not be needed depending on network setup)
+PostUp = iptables -A FORWARD -i %i -j ACCEPT; PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PreDown = iptables -D FORWARD -i %i -j ACCEPT; PreDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 
-# Arch PC peer (VPN client)
+# Peer entries (one per device)
 [Peer]
-PublicKey = [Garuda arch public key]
-AllowedIPs = 10.9.0.2/32, 192.168.10.201/32
+PublicKey = [PEER_PUBLIC_KEY]           # Generated from client: wg pubkey < private_key_file
+PresharedKey = [OPTIONAL_PRESHARED_KEY] # Optional for added security
+AllowedIPs = 10.9.0.2/32                # Example Peer IP assignment (verify against ip-assignments.md)
 
-# Windows remote client peer
-[Peer]
-PublicKey = [Windows laptop public key]
-AllowedIPs = 10.9.0.3/32
-
-# Homelab Ubuntu Server
-[Peer]
-PublicKey = [Pi Ubuntu server public key]
-AllowedIPs = 10.9.0.4/32
-
-# Samsung arya
-[Peer]
-PublicKey = [Samsung phone public key]
-AllowedIPs = 10.9.0.5/32
-
-# OrangePi
-[Peer]
-PublicKey = [OrangePi public key]
-AllowedIps = 10.9.0.6/32
+# Repeat for each peer...
 ```
 
-### Client Configuration (Raspberry Pi 5 — `/etc/wireguard/wg0.conf`)
+---
+
+## WireGuard Client Config Examples (peer devices)
+
+Each client (`wg0.conf`) should point to VPS `Endpoint` with its public key:
+
+### Raspberry Pi 5
 
 ```
 [Interface]
-PrivateKey = [pi wg private key]
-ListenPort = 51820
+PrivateKey = [PLACEHOLDER: PI_WG_PrivateKey]
 Address = 10.9.0.4/24
-#DNS = 1.1.1.1
+#DNS = 10.9.0.1                        # Optional: DNS settings per device requirements
 
 [Peer]
-PublicKey = [VPS wg public ip key]
-Endpoint = [VPS public ip]:51820
+PublicKey = [VPS_PUBLIC_KEY]
+PresharedKey = [OPTIONAL_PRE_SHARED_KEY]
+Endpoint = [PLACEHOLDER_VPS_PUBLIC_IP]:51820   # For remote access across ISP NAT/CGNAT
 AllowedIPs = 10.9.0.1/24
-PersistentKeepalive = 25
-```
 
-### Client Configuration (Garuda Desktop — `/etc/wireguard/wg0.conf`)
+PersistentKeepalive = 25               # Keep tunnel alive to allow endpoint discovery
+---
 
-```
-[Interface]
-PrivateKey = [arch garuda wg private key]
-ListenPort = 51820
-Address = 10.9.0.2/24
-DNS = 10.9.0.1
+## Enabling and Managing WireGuard
 
-[Peer]
-PublicKey = [VPS wg public ip key]
-Endpoint = [VPS public ip]:51820
-AllowedIPs = 10.9.0.0/24, 192.168.10.0/24
-PersistentKeepalive = 25
-```
-
-### Client Configuration (Laptop / Mobile)
-
-Use the official WireGuard apps. Create a config file with:
-
-```
-[Interface]
-PrivateKey = [client private key]
-Address = 10.9.0.x/32
-DNS = 10.9.0.1  # Pi-hole on VPS
-
-[Peer]
-PublicKey = [VPS public key]
-Endpoint = [VPS public IP]:[port]
-AllowedIPs = 10.9.0.0/24
-PersistentKeepalive = 25
-```
-
-> **Note:** If you want to route all device traffic through the VPS (full-tunnel -> **not recommended**), change `AllowedIPs` to `0.0.0.0/0, ::/0`. The current config uses split-tunnel (only WireGuard subnet traffic goes through the tunnel) = More secure.
-
-### Key Generation
+### VPS — Setup Commands
 
 ```bash
-# Generate key pair on each device
-wg genkey | tee privatekey | wg pubkey > publickey
-```
+# Install (Debian / Ubuntu)
+sudo apt install wireguard
 
-### Service Management
+# Generate server side key pair
+wg genkey | sudo tee /etc/wireguard/server_private.key
+wg pub  <  /etc/wireguard/server_private.key | sudo tee /etc/wireguard/server_public.key
+chmod  600 /etc/wireguard/*.key
 
-```bash
-# Start WireGuard
+# Start and enable on boot
 sudo wg-quick up wg0
+sudo systemctl enable --now wg-quick@wg0
 
-# Stop WireGuard
-sudo wg-quick down wg0
-
-# Show status
+# Show status and connected peers
 sudo wg show
+```
 
-# Enable on boot
-sudo systemctl enable wg-quick@wg0
+### Clients
 
-# On VPS: verify peers are connected
-sudo wg show wg0
-# Look for "latest handshake" timestamps for each peer
+Same key generation commands; then `sudo wg-quick up wg0` along with `sudo wg` to test — verify handshakes.
+
+---
+
+## Gluetun VPN (qBittorrent)
+
+- Isolates torrent traffic through a commercial VPN (Surfshark) to bypass ISP throttling and prevent IP leaks
+- Container `gluetun` requires kernel capability: `NET_ADMIN`
+- qBittorrent uses `network_mode: "service:gluetun"` to inherit the VPN interface
+
+### Verification Commands
+
+```bash
+# Check Gluetun container is healthy
+docker inspect gluetun --format '{{.State.Health.Status}}'
+
+# Verify torrent client is bound to VPN
+docker exec qbittorrent curl https://api.ipify.org
+# This should show the VPN exit node IP, not the Pi's public IP
 ```
 
 ---
 
-## 2. Tailscale (Fallback Mesh)
+## Troubleshooting (Common Issues)
 
-### Setup
+### WireGuard Handshake Failures
 
-```bash
-# Install on each node:
-curl -fsSL https://tailscale.com/install.sh | sh
+1. Confirm keys match: server's `[Peer] PublicKey` must exactly match client's public key
+2. Verify `AllowedIPs` includes peer IP ranges on both sides
+3. Check endpoint reachability: `ping -c 3 [VPS_PUBLIC_IP]`
+4. Confirm VPS allow forwarding: `sysctl net.ipv4.conf.all.forwarding=1`
+5. Look for firewall rules on the VPS blocking `51820/udp`:
+   `sudo ufw status | grep 51820`
 
-# Authenticate:
-sudo tailscale up
+### Keepalive Drops
 
-# On headless devices (Pi, VPS):
-sudo tailscale up --authkey=[PLACEHOLDER: auth key from Tailscale admin console] 
-```
+- PersistentKeepalive = 25 recommended for mobile/NAT clients, 120 for always-on LAN devices.
+- Check `sudo wg` last handshake — should be < 2 minutes for connected peers.
 
-- tailscale install command on linux machines are available on tailscale dashboard
-### Configuration
+### Tailscale as Backup
 
-- **Subnet routing** (if desired):
-  ```bash
-  sudo tailscale up --advertise-routes=10.0.0.0/24 --accept-routes
-  ```
+- Only for out-of-band administration. Keep disabled by default.
+- Install: `curl -fsSL https://tailscale.com/install.sh | sh`
+- Auth is via browser or auth key.
 
-- **ACLs** are managed via [Tailscale Admin Console](https://login.tailscale.com).
-
-### Key Features Used
-
-- **CGNAT traversal:** Works when WireGuard is blocked or unreachable
-- **Out-of-band admin:** SSH into Pi via Tailscale IP if LAN is down
-- **Secondary access path** for services
-
----
-
-## 3. Gluetun (qBittorrent VPN)
-
-### Docker Compose (see also `services/docker-compose-overview.md`)
-
-```yaml
-gluetun:
-  image: qmcgaw/gluetun:latest
-  container_name: gluetun
-  ports:
-    - "10.9.0.4:8080:8080"
-  volumes:
-    - ./gluetun/config:/gluetun
-  environment:
-    VPN_SERVICE_PROVIDER: surfshark
-    VPN_TYPE: wireguard
-    WIREGUARD_PRIVATE_KEY: "[PLACEHOLDER: Surfshark WireGuard key]"
-    WIREGUARD_ADDRESSES: "[PLACEHOLDER: Surfshark assigned IP]"
-    SERVER_REGIONS: "Singapore"
-  cap_add:
-    - NET_ADMIN
-  restart: unless-stopped
-
-qbittorrent:
-  image: lscr.io/linuxserver/qbittorrent:latest
-  container_name: qbittorrent
-  network_mode: "service:gluetun"
-  volumes:
-    - ./qbittorrent/config:/config
-    - /mnt/lvm/downloads:/downloads
-  environment:
-    TZ: "Asia/Jakarta"
-    UMASK: "002"
-  depends_on:
-    gluetun:
-      condition: service_healthy
-  restart: unless-stopped
-```
-
-### Switching VPN Region
-
-```bash
-# Update the SERVER_REGIONS env var in docker-compose.yml
-# Then recreate:
-docker compose up -d gluetun
-```
-
-### Verifying VPN Connection
-
-```bash
-# Check Gluetun status
-docker logs gluetun --tail 20
-
-# Verify external IP from within qBittorrent's namespace
-docker exec qbittorrent curl -s ifconfig.me
-
-# Expected: Surfshark exit node IP, NOT your home IP
-```
-
-### Kill Switch
-
-Gluetun has a built-in kill switch. If the VPN drops:
-
-- All traffic through the Gluetun network namespace is blocked
-- qBittorrent loses connectivity to prevent IP leakage
-- Gluetun automatically reconnects and resumes traffic
-
----
-
-## Troubleshooting
-
-### WireGuard Handshake Failing
-
-```bash
-# On client (e.g., Pi):
-ping 10.9.0.1  # VPS tunnel IP
-sudo wg show
-sudo tcpdump -i wg0 -n
-
-# On VPS:
-sudo wg show
-# Check all peers have recent handshakes
-sudo ufw status  # Check firewall allows WireGuard port
-```
-
-### Client Cannot Reach Pi Services
-
-```bash
-# Verify client is connected to WireGuard
-sudo wg show
-
-# Verify client DNS is set to 10.9.0.1
-# From client:
-nslookup nextcloud.example.com 10.9.0.1
-
-# Verify VPS can reach the Pi over WireGuard
-# From VPS:
-ping 10.9.0.x  # Pi WireGuard IP
-curl http://10.9.0.x:8080  # Test Nextcloud directly
-```
-
-### Gluetun Connection Issues
-
-```bash
-# View detailed logs
-docker compose logs gluetun
-
-# Test DNS from within the Gluetun namespace
-docker exec gluetun ping 1.1.1.1
-
-# Recreate with fresh config
-docker compose down gluetun
-docker compose up -d gluetun
-```
-
----
-
-> **Note:** All private keys and public IPs have been replaced with placeholders. The actual files on disk contain live values and should never be committed to Git.
+Refer to network/ip-assignments.md for peer inventory, current AllowedIPs and DNS server configs.

@@ -1,201 +1,102 @@
-# Backup & Restore Procedures — Future Plan
+# Backup & Restore — Blueprint & Reference (Synced 2026-11-16)
 
-## ⚠️ Current Status: **No Active Backup Plan yet!**
-
-This document serves as a **blueprint for a future backup strategy**. No automated backups, cron jobs, or off-site replication are currently configured. The scripts and schedules below are **planned work items** — nothing is running in production yet.
-
-**Priority:** High — data loss risk exists for Nextcloud (files + DB) and Immich (photos + DB).
+> ⚠️ **Status:** This is a reference blueprint. Some services (Nextcloud, Immich) have been backed up manually in the past; automated schedules are TBD.  
+> All backup scripts and schedules marked as `TO-IMPLEMENT` until scheduled cron jobs are created.
 
 ---
 
-## 1. Planned Backup Tiers
+## Current Manual Backups (Known Past Behavior)
 
-| Tier | Scope | Target Frequency | Recommended Method |
-|------|-------|-----------------|-------------------|
-| **Tier 1** | DB dumps (Nextcloud, Immich PostgreSQL) | Daily | `pg_dump` → compressed archive |
-| **Tier 2** | Application data (Nextcloud files, Immich photos) | Daily | rsync / tar to backup volume |
-| **Tier 3** | Config dirs (Prowlarr, Radarr, Jellyfin, qBittorrent, etc.) | Weekly | tar → backup volume |
-| **Tier 4** | Docker Compose + Git-tracked files | Per-change | Git commit (already done) |
-| **Tier 5** | Off-site / cloud replication | Monthly | Backblaze B2, rsync.net, or S3-compatible |
-| **Tier 6** | Full system state | Monthly | Volume snapshot + `docker-compose config` |
-
-> ⬜ **TODO:** Decide on a backup storage path (e.g., `/mnt/lvm/backups/` on the LVM volume, or a dedicated external drive).
+The user has described performing manual database dumps and file backups before Nextcloud upgrades (version 32.x → 33 exploration). See knowledge base for historical context.  
+Automated tiered backup still not in production.
 
 ---
 
-## 2. Database Dumps (Planned)
+## Planned Backup Strategy (To Implement)
 
-### PostgreSQL (Nextcloud, Immich)
+| Tier | Scope | Frequency | Method |
+|------|-------|-----------|--------|
+| **Tier 1** | PostgreSQL (Nextcloud, Immich) database dumps | Daily at midnight | `pgdump` → gzip |
+| **Tier 2** | Application data (`/mnt/lvm/*`) — files & DB volumes if not dumped | Daily | tar to `/mnt/lvm/backups/volumes` or external drive |
+| **Tier 3** | Config directories | Weekly (Sunday) | zip backup of config folders, restore tested quarterly |
+| **Tier 4**: Docker Compose configs | Version control via Git commits | Every change | Already tracked in repo |
+| **Tier 5** | Off-site / Cloud replication | Monthly | rclone → Backblaze B2 or S3-compatible storage |
+| **Tier 6** | Full state snapshot (volumes + compose config) | Quarterly — before major upgrades | Snapshot + `docker compose config > configs.yml` |
 
-The script below is a **template** for future implementation. It is not yet scheduled or deployed.
+---
+
+## PostgreSQL Dumps — Reference Script
 
 ```bash
 #!/bin/bash
-# backup-postgres.sh (NOT YET ACTIVE)
+# backup-postgres.sh — To be scheduled in `/etc/cron.daily/`
 BACKUP_DIR="/mnt/lvm/backups/postgres"
 DATE=$(date +%Y%m%d_%H%M%S)
 
-# Nextcloud
-docker exec nextcloud-db pg_dump -U nextcloud nextcloud > "$BACKUP_DIR/nextcloud_$DATE.sql"
+docker exec nextcloud-db pg_dump -U nextcloud nextcloud > "$BACKUP_DIR/nextcloud_$DATE.sql" || exit 1
+docker exec immich-db pg_dump -U immich immich     > "$BACKUP_DIR/immich_    $DATE.sql" || exit 1
 
-# Immich
-docker exec immich-db pg_dump -U immich immich > "$BACKUP_DIR/immich_$DATE.sql"
+gzip "$BACKUP_DIR"/nextcloud_$DATE.sql.gz && gzip "$BACKUP_DIR"/immich_$DATE.sql.gz
 
-# Compress
-gzip "$BACKUP_DIR/nextcloud_$DATE.sql"
-gzip "$BACKUP_DIR/immich_$DATE.sql"
-
-# Remove backups older than 7 days
+# Retain last 7 days
 find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
 ```
 
-### Redis (Cache Only)
-- Redis is ephemeral cache; no backup needed.
-- On restart, Nextcloud and Immich will repopulate the cache.
+> ⚠️ Immich DB engine is historically thought to be PostgreSQL 15 Alpine but is not confirmed — verify with `docker exec immich-db psql -l` before scripting dumps.
 
 ---
 
-## 3. Volume Backup (Planned)
-
-### Application Data Volumes
+## Data Volume Backups (Reference)
 
 ```bash
 #!/bin/bash
-# backup-volumes.sh (NOT YET ACTIVE)
+# backup-volumes.sh — To be scheduled
 BACKUP_DIR="/mnt/lvm/backups/volumes"
 DATE=$(date +%Y%m%d)
 
-tar czf "$BACKUP_DIR/nextcloud_data_$DATE.tar.gz" -C /mnt/lvm/nextcloud data
-tar czf "$BACKUP_DIR/immich_photos_$DATE.tar.gz" -C /mnt/lvm/immich photos
+tar -czf "$BACKUP_DIR/nextcloud_data-$DATE.tar.gz"  --exclude='*.tmp' -C /mnt/lvm/nextcloud data
+tar -czf "$BACKUP_DIR/immich_photos-$DATE.tar.gz"   -C /mnt/lvm/immich photos
 
-# Config directories
-# Note: Pi-hole config is on the VPS — backup separately from the VPS host
-# SSH into VPS and run: tar czf pihole_config.tar.gz ./pihole
-tar czf "$BACKUP_DIR/configs_$DATE.tar.gz" \
-  ./prowlarr \
-  ./radarr \
-  ./qbittorrent \
-  ./jellyfin
+# Config-only weekly tar (Prowlarr, Radarr, qBittorrent etc.)
+tar -czf "$BACKUP_DIR/configs-$DATE.tar.gz" ./prowlarr ./radarr ./qbittorrent ./jellyfin
 ```
 
----
-
-## 4. Restore Procedures (Reference)
-
-> These restore procedures are **documented for future use** — they cannot be run yet since no backups exist.
-
-### Nextcloud Full Restore
-
-1. **Stop the containers:**
-   ```bash
-   docker compose stop nextcloud nextcloud-db nextcloud-redis
-   ```
-
-2. **Restore database:**
-   ```bash
-   # Start DB only
-   docker compose start nextcloud-db
-   sleep 5
-   docker exec -i nextcloud-db psql -U nextcloud nextcloud < nextcloud_20250101_120000.sql
-   ```
-
-3. **Restore data files:**
-   ```bash
-   rm -rf /mnt/lvm/nextcloud/data/*
-   tar xzf /mnt/lvm/backups/volumes/nextcloud_data_20250101.tar.gz -C /mnt/lvm/nextcloud
-   ```
-
-4. **Restore config and apps:**
-   ```bash
-   # Config is in ./nextcloud/config
-   # Apps are in ./nextcloud/custom_apps
-   # Restore from your backup if needed
-   ```
-
-5. **Restart and verify:**
-   ```bash
-   docker compose up -d nextcloud nextcloud-redis
-   docker exec nextcloud occ maintenance:mode --off
-   docker exec nextcloud occ files:scan --all
-   ```
-
-### Immich Full Restore
-
-1. **Stop the containers:**
-   ```bash
-   docker compose stop immich-server immich-microservices immich-machine-learning immich-db immich-redis
-   ```
-
-2. **Restore database:**
-   ```bash
-   docker compose start immich-db
-   sleep 5
-   docker exec -i immich-db psql -U immich immich < immich_20250101_120000.sql
-   ```
-
-3. **Restore photos:**
-   ```bash
-   rm -rf /mnt/lvm/immich/photos/*
-   tar xzf /mnt/lvm/backups/volumes/immich_photos_20250101.tar.gz -C /mnt/lvm/immich
-   ```
-
-4. **Restart:**
-   ```bash
-   docker compose up -d immich-server immich-microservices immich-machine-learning immich-redis
-   ```
-
-### Individual Service Restore (Stateless)
-
-For services like Prowlarr, Radarr, Jellyfin, Pi-hole, Uptime Kuma, and Homepage:
-
-```bash
-# 1. Stop the container
-docker compose stop <service-name>
-
-# 2. Restore config from backup
-tar xzf /mnt/lvm/backups/volumes/configs_$DATE.tar.gz ./<service-name>
-
-# 3. Restart
-docker compose up -d <service-name>
-```
+> Retention policy: keep volumes 14 days, configs 30 days. Adjust based on user requirements.
 
 ---
 
-## 5. Off-Site Backup (Planned)
+## Restore Procedures — Verified by User
 
-> ⬜ **TODO:** Choose and configure an off-site backup destination.
+### Nextcloud (MariaDB + Data)
 
-| Option | Pros | Cons | Est. Cost |
-|--------|------|------|-----------|
-| **Backblaze B2** | S3-compatible, low cost | Egress fees on restore | ~$5/TB/month |
-| **rsync.net** | Flat-rate storage | Slightly higher cost | ~$20/TB/month |
-| **Rclone + S3** | Flexible, self-managed | Requires S3 provider | Varies |
-| **External HDD (cold)** | One-time cost, no monthly fee | Manual, no automation | $50–100 |
+1. Stop all Nextcloud containers (`docker compose down nextcloud`, or enable maintenance mode first) to prevent data races during restore.
+2. Restore database:
+   ```bash
+   gzip -dc <backup-file>.sql.gz | docker exec -i nextcloud-db mariadb -u root -p [PLACEHOLDER_ROOT_PASSWORD] nextcloud
+   ```
+   Adjust user/password/DB name; do NOT store real credentials in this doc.
+3. Restore data files to `/mnt/lvm/nextcloud-data` — replace directory permissions (www-data +).
 
-**Recommended approach:** Start with local backups to `/mnt/lvm/backups/`, then add off-site replication via `rclone` once the local pipeline is stable.
+### Immich Upload / DB — Reference Flow
 
----
+1. Before restoring, confirm DB type and engine:
+   ```bash
+   docker exec immich-db psql -d postgresql_database_name 2>/dev/null || echo "not PostgreSQL"
+   ```
+2. Stop immich-db container to prevent concurrent writes during restore.
+3. Restore database with appropriate tool (PostgreSQL or MariaDB if engine differs) — refer to backup scripts.
+4. Restore upload directory at `/mnt/lvm/immich-app` or legacy `/mnt/lvm/immich/photos`.
 
-## 6. Implementation Roadmap
-
-| # | Task | Dependencies | Est. Effort |
-|---|------|-------------|-------------|
-| 1 | Create backup directory: `mkdir -p /mnt/lvm/backups/{postgres,volumes}` | LVM mounted | 5 min |
-| 2 | Place scripts in `~/scripts/` and test manually | Step 1 | 30 min |
-| 3 | Schedule cron jobs for DB + volume dumps | Step 2 | 15 min |
-| 4 | Add Pi-hole + VPS backup via SSH | SSH keys configured | 30 min |
-| 5 | Configure off-site sync (rclone to B2, etc.) | Step 3 | 1 hr |
-| 6 | Document and test restore procedure | Steps 1–5 | 1 hr |
-| 7 | Set up monthly backup verification | Step 6 | 30 min |
+See `procedures/deployment.md` for generic container update workflows that cover rollback.
 
 ---
 
-## 7. Backup Verification (Planned)
+## External Backups — TBD
 
-- **Monthly:** Test-restore Nextcloud + Immich to a staging directory.
-- **Weekly:** Verify backup files exist and are non-empty.
-- **Automated check script:** ⬜ TODO — write a `verify-backups.sh` script.
+Options:
+1. Backblaze B2 — S3-compatible, low cost (~$5/TB/month)
+2. rsync.net — flat-rate storage
+3. rclone to home server VPS or public cloud bucket
+4. Physical USB backup drive for quarterly full volume snapshots
 
 ---
-
-> **Note:** All backup scripts should be stored in a `scripts/` directory once implemented. Cron jobs should be configured on the Pi.

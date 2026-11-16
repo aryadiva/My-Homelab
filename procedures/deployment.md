@@ -1,144 +1,112 @@
-# Deployment Procedure
+# Deployment Guide — Services Update & Rollback (Synced 2026-11-16)
 
-## Standard Service Update Workflow
-
-Used when updating an existing service (new image tag, config change, or env var update).
-
-### Step 1 — Pull Latest Images
-
-```bash
-cd /path/to/docker-compose-directory
-docker compose pull <service-name>
-```
-
-Or pull all:
-
-```bash
-docker compose pull
-```
-
-### Step 2 — Recreate the Container
-
-```bash
-docker compose up -d <service-name>
-```
-
-Or recreate all:
-
-```bash
-docker compose up -d
-```
-
-Docker Compose will only recreate services whose image or configuration has changed.
-
-### Step 3 — Verify Health
-
-```bash
-# Check container status
-docker ps --filter "name=<service-name>"
-
-# Check logs for errors
-docker compose logs <service-name> --tail=50
-
-# Check the service URL/port
-curl -I http://localhost:<port>
-```
-
-### Step 4 — Clean Up Old Images (Optional)
-
-```bash
-docker image prune -a
-```
+> This document covers standard container update, rollback, and adding new services for Docker Compose deployments.  
+> All steps assume working knowledge of the host's `docker compose` context directory (`./infra.yml`, `./media.yml` as in docker-compose-overview.md).
 
 ---
 
-## Rolling Back a Service
+## Updating a Service (Rolling Deployment)
 
-If a new version causes issues:
+### 1. Pull Latest Image
 
 ```bash
-# Tag the previous image version in docker-compose.yml
-# or use a specific tag:
-docker compose up -d <service-name>
-
-# If using latest, pull the previous tag explicitly:
-# 1. Edit docker-compose.yml to pin the previous version tag
-# 2. docker compose up -d <service-name>
+cd /path/to/compose/directory
+docker compose pull [service-name]
 ```
 
-**Quick rollback reference:**
-
-| Service | Previous Stable Tag |
-|---------|-------------------|
-| Nextcloud | `v32` |
-| Immich | `v2.7.4` |
-| Jellyfin | `v10.11.8` |
-| Matrix Synapse | `latest` |
-| Pi-hole | `v6.4` |
+Example: `docker compose pull nextcloud` — only pulls changed images, not all services (unless no args).
 
 ---
 
-## Adding a New Service
+### 2. Apply and Restart
 
-1. **Add the service block** to the appropriate `docker-compose.yml` section (infra or media).
-2. **Assign it to the correct Docker network.**
-3. **Choose a port** that does not conflict (check `services/inventory.md` for port allocations).
-4. **Update** `services/inventory.md` and `services/container-network-map.md` with the new entry.
-5. **Update Pi-hole** with a local DNS record if needed.
-6. **Deploy:**
-   ```bash
-   docker compose up -d <new-service>
+```bash
+# Apply config and restart the updated service(s)
+docker compose up -d [service-name-or-new-compose-file-snapshot]
+```
+
+Use `-d` for detached background mode.
+
+---
+
+### 3. Monitor Logs on Startup
+
+```bash
+docker compose logs -f [service-name] --tail=30
+```
+
+If errors appear at startup, check: image tag compatibility with existing volumes and env vars.
+
+---
+
+## Rolling Back a Service — Known Stable Tags
+
+Nextcloud was rolled back previously from version 32.x after AIO exploration (v33). Current tag unknown.
+
+### Quick Rollback Steps
+
+1. Pin to previous working image in Compose:
+   ```yaml
+   nextcloud-image: nextcloud:v32-apache  # Replace with actual working tag
    ```
 
+2. Pull and restart:
+   ```bash
+   docker compose pull nextcloud && docker compose up -d nextcloud
+   ```
+
+3. If service fails, switch back to latest for debugging, then re-try previous tag.
+
 ---
 
-## Environment Variable Management
+## Adding a New Container Service
 
-Sensitive values (DB passwords, API keys, WireGuard keys) should be stored in:
+1. Add service block to the appropriate Compose file (`infra.yml`, `media.yml`, or custom one)
+2. Ensure network membership (`networks: [media_net]` or your own networks)
+3. Pick a non-conflicting port binding (verify against [`services/inventory.md`](../services/inventory.md))
+4. Configure volumes for persistent data if required
+5. Add to `.env` only secrets and env vars needed
+6. Commit any config changes via Git if tracked in repo
 
-1. A `.env` file in the Compose directory (excluded from Git via `.gitignore`)
-2. Referenced in `docker-compose.yml` as `${VARIABLE_NAME}`
+Then deploy:
 
 ```bash
-# .env file template (DO NOT COMMIT)
-NEXTCLOUD_DB_PASSWORD=your_password_here
-IMMICH_DB_PASSWORD=your_password_here
-PIHOLE_WEBPASSWORD=your_password_here
-WIREGUARD_PRIVATE_KEY=your_key_here
-TZ=Asia/Jakarta
+docker compose up -d new-service-name
+docker ps | grep new-service-name
 ```
+
+Update `services/inventory.md` with the new entry — port, paths, network.
 
 ---
 
-## Maintenance Mode (Nextcloud)
+## Secret & Environment Variable Management
+
+Sensitive values (DB passwords, API keys, WireGuard private keys, virtual keys) should NOT be committed to Git:
+
+1. Place in `.env` file in the Docker compose directory
+2. Add `.env` to `.gitignore` to prevent commits
+3. When pulling `docker compose up`, Docker reads local env file and injects secrets at runtime
+
+Example `.env` snippet:
 
 ```bash
-# Enable
-docker exec nextcloud occ maintenance:mode --on
-
-# Disable
-docker exec nextcloud occ maintenance:mode --off
+NEXTCLOUD_DB_PASSWORD=[PLACEHOLDER]    # DO NOT store actual password in docs
+IMMICH_DB_PASSWORD=[PLACEHOLDER]       # Replace with a unique strong value on each host
+PIHOLE_WEBPASSWORD=[PLACEHOLDER]       # Dashy, Vaultwarden passwords similarly managed
+WIREGUARD_PRIVATE_KEY=GF...             # NEVER copy real keys from this doc — use per-host generated keys
 ```
+
+Verify secrets never appear in Git logs: `git log --all --full-history -- '*.env'` should return no matches on tracked files.
 
 ---
 
-## Service-Specific Notes
+## Docker Compose Project Snapshots
 
-### qBittorrent + Gluetun
+When backing up or migrating configs, snapshot compose projects with command:
 
-- qBittorrent **must** start after Gluetun is healthy.
-- To restart Gluetun (e.g., switch VPN region):
-  ```bash
-  docker compose restart gluetun
-  # qBittorrent will restart automatically due to restart policy
-  ```
+```bash
+# Outputs rendered config YAML to a file for archival
+docker compose config > ../archive-compose-config.yml.bak
+```
 
-### Jellyfin
-
-- Media is mounted **read-only** (`:ro` suffix in volume mount).
-- To add new media, write to `/mnt/lvm/media/` directly (not through Jellyfin) through nextcloud or save files from qBittorrent.
-
-### Pi-hole
-
-- Restarting Pi-hole will briefly interrupt DNS resolution.
-- Plan updates during low-traffic windows.
+This helps recover if the repo `.yml` files get corrupted but volumes remain healthy.
