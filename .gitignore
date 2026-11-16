@@ -16,6 +16,9 @@ Thumbs.db
 # Continue AI config
 .continue/
 
+# opencode stuff
+.opencode/
+
 # Diagram source files (exported PNG is tracked)
 *.drawio
 
