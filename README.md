@@ -1,4 +1,4 @@
-# My-Homelab Documentation — Synced 2026-11-16
+# My-Homelab Documentation — Synced 2026-11-16 - Still WIP (bear with me)
 
 > Current reference state from knowledge base `standards/homelab-ecosystem-2026-11-16-KNOWLEDGE-BASE.md`.
 > Historical documentation (files below) was accurate previously but has not been re-verified.
